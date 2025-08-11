@@ -6,7 +6,7 @@
     "file_format": [".bin", ".cue", ".iso", ".zip"],
     "roms_folder": "psx",
     "boxarts": "https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/",
-    "should_unzip": false
+    "should_unzip": true
   },
   {
     "name": "PlayStation 2",
