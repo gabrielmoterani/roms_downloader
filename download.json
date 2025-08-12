@@ -32,6 +32,13 @@
     "should_unzip": true
   },
   {
+    "name": "Game Boy Aftermarket",
+    "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy%20%28Aftermarket%29/",
+    "file_format": [".gb", ".zip"],
+    "roms_folder": "gb",
+    "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy/Named_Boxarts/",
+    "should_unzip": true
+  },  {
     "name": "Game Boy",
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy/",
     "file_format": [".gb", ".zip"],
