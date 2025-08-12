@@ -1,20 +1,24 @@
-.PHONY: run install dev clean test lint format setup
+.PHONY: run watch install dev clean test lint format setup
+
+CONDA_ENV = roms_downloader
+CONDA_ACTIVATE = conda run -n $(CONDA_ENV)
 
 # Default target
 run:
-	DEV_MODE=true python src/index.py
+	DEV_MODE=true $(CONDA_ACTIVATE) watchmedo auto-restart --patterns="*.py;*.json" --recursive --signal SIGTERM python src/index.py
 
 # Setup development environment
 setup:
 	conda env create -f environment.yml
+	$(CONDA_ACTIVATE) pip install -e .[dev]
 
 # Install in development mode
 install:
-	pip install -e .
+	$(CONDA_ACTIVATE) pip install -e .
 
 # Install with dev dependencies
 dev:
-	pip install -e .[dev]
+	$(CONDA_ACTIVATE) pip install -e .[dev]
 
 # Clean generated files
 clean:
@@ -28,30 +32,31 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
-# Format code
-format:
-	black src/
-
-# Lint code
-lint:
-	flake8 src/
-
-# Run tests (if added later)
-test:
-	pytest
-
 # Create distribution package for console deployment
-build: src/index.py assets/config/download.json
+build:
 	mkdir -p dist
 	cp src/index.py dist/dw.pygame
 	cp assets/config/download.json dist/download.json
 	@echo "Distribution created in dist/ folder"
 	@echo "Copy dist/dw.pygame and dist/download.json to console pygame directory"
 
+# Format code with black
+format:
+	$(CONDA_ACTIVATE) black src/
+
+# Lint code with flake8
+lint:
+	$(CONDA_ACTIVATE) flake8 src/
+
+# Run tests with pytest
+test:
+	$(CONDA_ACTIVATE) pytest
+
 # Show help
 help:
 	@echo "Available targets:"
 	@echo "  run      - Run the ROM downloader application"
+	@echo "  watch    - Run with file watching (auto-restart on changes)"
 	@echo "  setup    - Create conda environment"
 	@echo "  install  - Install in development mode"
 	@echo "  dev      - Install with dev dependencies"
@@ -61,14 +66,3 @@ help:
 	@echo "  test     - Run tests with pytest"
 	@echo "  build    - Create distribution package"
 	@echo "  help     - Show this help message"
-
-# Install git hooks
-install-hooks:
-	cp .git/hooks/pre-push.sample .git/hooks/pre-push 2>/dev/null || true
-	chmod +x .git/hooks/pre-push
-	@echo "Git hooks installed"
-
-# Remove git hooks  
-uninstall-hooks:
-	rm -f .git/hooks/pre-push
-	@echo "Git hooks removed"

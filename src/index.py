@@ -31,8 +31,6 @@ else:
 FPS = 30
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 FONT_SIZE = 28
-SCROLL_DELAY = 600  # milliseconds between scrolls when holding D-pad (slower)
-INITIAL_SCROLL_DELAY = 3000  # initial delay before continuous scrolling starts (1.5 seconds)
 
 def log_error(error_msg, error_type=None, traceback_str=None):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -989,8 +987,6 @@ try:
     # Main loop
     running = True
     button_delay = 0
-    last_scroll_time = 0
-    is_scrolling = False
 
     while running:
         try:
@@ -1276,29 +1272,26 @@ try:
                 elif event.type == pygame.JOYHATMOTION:
                     hat = joystick.get_hat(0)
                     if hat[1] != 0:  # Up or Down
-                        if not is_scrolling:
-                            if mode == "games" and settings["view_type"] == "grid":
-                                # Grid navigation: move up/down
-                                cols = 4
-                                if hat[1] == 1:  # Up
-                                    if highlighted >= cols:
-                                        highlighted -= cols
-                                else:  # Down
-                                    if highlighted + cols < len(game_list):
-                                        highlighted += cols
-                            else:
-                                # Regular navigation for list view and other modes
-                                if mode == "games":
-                                    max_items = len(game_list)
-                                elif mode == "settings":
-                                    max_items = len(settings_list)
-                                else:  # systems
-                                    max_items = len(data) + 1  # +1 for Settings option
-                                
-                                if max_items > 0:
-                                    highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
-                            last_scroll_time = current_time
-                            is_scrolling = True
+                        if mode == "games" and settings["view_type"] == "grid":
+                            # Grid navigation: move up/down
+                            cols = 4
+                            if hat[1] == 1:  # Up
+                                if highlighted >= cols:
+                                    highlighted -= cols
+                            else:  # Down
+                                if highlighted + cols < len(game_list):
+                                    highlighted += cols
+                        else:
+                            # Regular navigation for list view and other modes
+                            if mode == "games":
+                                max_items = len(game_list)
+                            elif mode == "settings":
+                                max_items = len(settings_list)
+                            else:  # systems
+                                max_items = len(data) + 1  # +1 for Settings option
+                            
+                            if max_items > 0:
+                                highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
                     elif hat[0] != 0 and mode == "games":  # Left or Right (only in games mode)
                         if settings["view_type"] == "grid":
                             # Grid navigation: move left/right
@@ -1316,41 +1309,7 @@ try:
                                 highlighted = find_next_letter_index(items, highlighted, -1)
                             else:  # Right
                                 highlighted = find_next_letter_index(items, highlighted, 1)
-                    else:
-                        is_scrolling = True
 
-            # Handle continuous scrolling
-            if is_scrolling and joystick:
-                hat = joystick.get_hat(0)
-                if hat[1] != 0:
-                    # Check if enough time has passed for the next scroll (initial delay then regular delay)
-                    time_since_start = current_time - last_scroll_time
-                    if time_since_start >= INITIAL_SCROLL_DELAY:
-                        # After initial delay, scroll at regular intervals
-                        scroll_intervals = (time_since_start - INITIAL_SCROLL_DELAY) // SCROLL_DELAY
-                        if scroll_intervals > 0 and (time_since_start - INITIAL_SCROLL_DELAY) % SCROLL_DELAY < 50:  # 50ms tolerance
-                            if mode == "games" and settings["view_type"] == "grid":
-                                # Grid continuous scrolling: move up/down by rows
-                                cols = 4
-                                if hat[1] == 1:  # Up
-                                    if highlighted >= cols:
-                                        highlighted -= cols
-                                else:  # Down
-                                    if highlighted + cols < len(game_list):
-                                        highlighted += cols
-                            else:
-                                # Regular continuous scrolling for list view and other modes
-                                if mode == "games":
-                                    max_items = len(game_list)
-                                elif mode == "settings":
-                                    max_items = len(settings_list)
-                                else:  # systems
-                                    max_items = len(data) + 1  # +1 for Settings option
-                                
-                                if max_items > 0:
-                                    highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
-                else:
-                    is_scrolling = True
 
         except Exception as e:
             log_error("Error in main loop", type(e).__name__, traceback.format_exc())
