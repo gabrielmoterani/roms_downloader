@@ -82,7 +82,11 @@ try:
     selected_system = 0
     selected_games = set()
     game_list = []
-    mode = "systems"  # systems, games, or settings
+    mode = "systems"  # systems, games, settings, or add_systems
+    
+    # Add systems state
+    available_systems = []
+    add_systems_highlighted = 0
     
     # Pagination variables for Switch
     current_page = 0
@@ -1523,9 +1527,10 @@ try:
             update_image_cache()
                 
             if mode == "systems":
-                # Add Settings option to systems list
-                systems_with_settings = [d['name'] for d in data] + ["Settings"]
-                draw_menu("Select a System", systems_with_settings, set())
+                # Filter out list_systems entries and add Settings/Add Systems options
+                regular_systems = [d['name'] for d in data if not d.get('list_systems', False)]
+                systems_with_options = regular_systems + ["Add Systems", "Settings"]
+                draw_menu("Select a System", systems_with_options, set())
             elif mode == "games":
                 if game_list:  # Only draw if we have games
                     if settings["view_type"] == "grid":
@@ -1536,6 +1541,8 @@ try:
                     draw_loading_message("No games found for this system")
             elif mode == "settings":
                 draw_settings_menu()
+            elif mode == "add_systems":
+                draw_add_systems_menu()
             
             # Draw modals if they should be shown
             modal_drawn = False
