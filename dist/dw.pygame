@@ -89,6 +89,9 @@ try:
     total_pages = 1
     highlighted = 0
     
+    # Settings scroll variables
+    settings_scroll_offset = 0
+    
     # Settings will be loaded after functions are defined
     settings = {}
     settings_list = [
