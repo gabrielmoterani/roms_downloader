@@ -98,6 +98,8 @@ try:
         "Update from GitHub",
         "View Type",
         "USA Games Only",
+        "Debug Controller",
+        "Controller Type",
         "Work Directory",
         "ROMs Directory"
     ]
@@ -138,6 +140,8 @@ try:
             "cache_enabled": True,
             "view_type": "list",
             "usa_only": False,
+            "debug_controller": False,
+            "controller_type": "rg35xx",
             "work_dir": default_work_dir,
             "roms_dir": default_roms_dir
         }
@@ -404,8 +408,9 @@ try:
             screen.blit(size_surf, (size_x, bar_y + bar_height + 10))
         
         # Draw instructions
+        back_button_name = get_button_name("back")
         instructions = [
-            "Press A to cancel download",
+            f"Press {back_button_name} to cancel download",
             "Please wait while files are being downloaded..."
         ]
         
@@ -427,10 +432,12 @@ try:
         y += FONT_SIZE + 10
         
         # Draw instructions
+        select_button_name = get_button_name("select")
+        back_button_name = get_button_name("back")
         instructions = [
             "Use D-pad to navigate",
-            "Press B to toggle settings",
-            "Press A to go back"
+            f"Press {select_button_name} to toggle settings",
+            f"Press {back_button_name} to go back"
         ]
         
         for instruction in instructions:
@@ -451,17 +458,23 @@ try:
             elif i == 1:  # Enable Image Cache
                 setting_value = "ON" if settings["cache_enabled"] else "OFF"
             elif i == 2:  # Reset Image Cache
-                setting_value = "Press B to reset"
+                select_button_name = get_button_name("select")
+                setting_value = f"Press {select_button_name} to reset"
             elif i == 3:  # Update from GitHub
-                setting_value = "Press B to update"
+                select_button_name = get_button_name("select")
+                setting_value = f"Press {select_button_name} to update"
             elif i == 4:  # View Type
                 setting_value = settings["view_type"].upper()
             elif i == 5:  # USA Games Only
                 setting_value = "ON" if settings["usa_only"] else "OFF"
-            elif i == 6:  # Work Directory
+            elif i == 6:  # Debug Controller
+                setting_value = "ON" if settings["debug_controller"] else "OFF"
+            elif i == 7:  # Controller Type
+                setting_value = settings["controller_type"].upper()
+            elif i == 8:  # Work Directory
                 work_dir = settings.get("work_dir", "")
                 setting_value = work_dir[-30:] + "..." if len(work_dir) > 30 else work_dir
-            elif i == 7:  # ROMs Directory
+            elif i == 9:  # ROMs Directory
                 roms_dir = settings.get("roms_dir", "")
                 setting_value = roms_dir[-30:] + "..." if len(roms_dir) > 30 else roms_dir
             
@@ -476,7 +489,11 @@ try:
         info_surf = font.render(cache_info, True, GRAY)
         screen.blit(info_surf, (20, y))
         
-        pygame.display.flip()
+        # Draw debug controller info
+        draw_debug_controller()
+        
+        if not show_game_details:
+            pygame.display.flip()
 
     def draw_grid_view(title, items, selected_indices):
         screen.fill(WHITE)
@@ -488,11 +505,16 @@ try:
         y += FONT_SIZE + 10
         
         # Draw instructions
+        select_button_name = get_button_name("select")
+        back_button_name = get_button_name("back")
+        start_button_name = get_button_name("start")
+        detail_button_name = get_button_name("detail")
         instructions = [
             "Use D-pad to navigate",
-            "Press B to select/unselect games",
-            "Press A to go back to systems",
-            f"Press START to download {len(selected_indices)} selected games"
+            f"Press {select_button_name} to select/unselect games",
+            f"Press {detail_button_name} to view details",
+            f"Press {back_button_name} to go back to systems",
+            f"Press {start_button_name} to download {len(selected_indices)} selected games"
         ]
         
         for instruction in instructions:
@@ -604,7 +626,11 @@ try:
             message_y = screen_height - 30
             screen.blit(message_surf, (20, message_y))
         
-        pygame.display.flip()
+        # Draw debug controller info
+        draw_debug_controller()
+        
+        if not show_game_details:
+            pygame.display.flip()
 
     def draw_menu(title, items, selected_indices):
         screen.fill(WHITE)
@@ -616,18 +642,24 @@ try:
         y += FONT_SIZE + 10
 
         # Draw instructions based on mode
+        select_button_name = get_button_name("select")
+        back_button_name = get_button_name("back")
+        start_button_name = get_button_name("start")
+        detail_button_name = get_button_name("detail")
+        
         if mode == "systems":
             instructions = [
                 "Use D-pad to navigate",
-                "Press B to select a system",
-                "Press A to go back"
+                f"Press {select_button_name} to select a system",
+                f"Press {back_button_name} to go back"
             ]
         else:  # games mode
             instructions = [
                 "Use D-pad to navigate",
-                "Press B to select/unselect games",
-                "Press A to go back to systems",
-                f"Press START to download {len(selected_games)} selected games"
+                f"Press {select_button_name} to select/unselect games",
+                f"Press {detail_button_name} to view details",
+                f"Press {back_button_name} to go back to systems",
+                f"Press {start_button_name} to download {len(selected_games)} selected games"
             ]
         
         # Draw instructions
@@ -700,7 +732,128 @@ try:
             page_y = screen_height - 30
             screen.blit(page_surf, (20, page_y))
 
-        pygame.display.flip()
+        # Draw debug controller info
+        draw_debug_controller()
+
+        if not show_game_details:
+            pygame.display.flip()
+
+    def draw_game_details_modal(game_item):
+        """Draw the game details modal overlay"""
+        # Semi-transparent background overlay
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.set_alpha(128)
+        overlay.fill(BLACK)
+        screen.blit(overlay, (0, 0))
+        
+        # Modal background
+        modal_width = 500
+        modal_height = 400
+        modal_x = (SCREEN_WIDTH - modal_width) // 2
+        modal_y = (SCREEN_HEIGHT - modal_height) // 2
+        
+        modal_rect = pygame.Rect(modal_x, modal_y, modal_width, modal_height)
+        pygame.draw.rect(screen, WHITE, modal_rect)
+        pygame.draw.rect(screen, BLACK, modal_rect, 3)
+        
+        # Game name
+        if isinstance(game_item, dict):
+            game_name = game_item.get('name', 'Unknown Game')
+        else:
+            game_name = os.path.splitext(game_item)[0] if isinstance(game_item, str) else 'Unknown Game'
+        
+        # Draw title
+        title_surf = font.render("Game Details", True, BLACK)
+        title_x = modal_x + 20
+        title_y = modal_y + 20
+        screen.blit(title_surf, (title_x, title_y))
+        
+        # Draw game name (with text wrapping if needed)
+        name_y = title_y + 40
+        max_name_width = modal_width - 40
+        
+        # Simple text wrapping
+        words = game_name.split()
+        lines = []
+        current_line = []
+        
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            test_surf = font.render(test_line, True, BLACK)
+            if test_surf.get_width() <= max_name_width:
+                current_line.append(word)
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                    current_line = [word]
+                else:
+                    lines.append(word)  # Single word too long
+        
+        if current_line:
+            lines.append(' '.join(current_line))
+        
+        # Draw wrapped text
+        for i, line in enumerate(lines[:3]):  # Limit to 3 lines
+            name_surf = font.render(line, True, GREEN)
+            screen.blit(name_surf, (modal_x + 20, name_y + i * (FONT_SIZE + 5)))
+        
+        # Draw large image if available
+        image_y = name_y + len(lines) * (FONT_SIZE + 5) + 20
+        boxart_url = data[selected_system].get('boxarts', '') if selected_system < len(data) else ''
+        thumbnail = get_thumbnail(game_item, boxart_url)
+        
+        if thumbnail and thumbnail != "loading":
+            # Scale image to be larger (up to 256x256)
+            large_size = (256, 256)
+            try:
+                large_image = pygame.transform.scale(thumbnail, large_size)
+                image_x = modal_x + (modal_width - large_size[0]) // 2
+                screen.blit(large_image, (image_x, image_y))
+                
+                # Draw border around image
+                image_rect = pygame.Rect(image_x, image_y, large_size[0], large_size[1])
+                pygame.draw.rect(screen, BLACK, image_rect, 2)
+            except:
+                # Fallback to original thumbnail
+                image_x = modal_x + (modal_width - THUMBNAIL_SIZE[0]) // 2
+                screen.blit(thumbnail, (image_x, image_y))
+        else:
+            # No image available text
+            no_image_text = "No image available"
+            no_image_surf = font.render(no_image_text, True, GRAY)
+            no_image_x = modal_x + (modal_width - no_image_surf.get_width()) // 2
+            screen.blit(no_image_surf, (no_image_x, image_y))
+        
+        # Instructions with padding
+        back_button_name = get_button_name("back")
+        instruction_text = f"Press {back_button_name} to close"
+        instruction_surf = font.render(instruction_text, True, WHITE)
+        instruction_x = modal_x + (modal_width - instruction_surf.get_width()) // 2
+        instruction_y = modal_y + modal_height + 20  # Added 20px more padding
+        screen.blit(instruction_surf, (instruction_x, instruction_y))
+
+    def draw_debug_controller():
+        """Draw the current pressed button at the bottom of the screen if debug mode is enabled"""
+        if not settings.get("debug_controller", False):
+            return
+        
+        current_time = pygame.time.get_ticks()
+        if current_time - last_button_time < BUTTON_DISPLAY_TIME and current_pressed_button:
+            screen_width, screen_height = screen.get_size()
+            debug_text = f"Button: {current_pressed_button}"
+            debug_surf = font.render(debug_text, True, BLACK)
+            debug_x = screen_width - debug_surf.get_width() - 20
+            debug_y = screen_height - 30
+            
+            # Draw background rectangle
+            padding = 5
+            debug_rect = pygame.Rect(debug_x - padding, debug_y - padding, 
+                                   debug_surf.get_width() + 2 * padding, 
+                                   debug_surf.get_height() + 2 * padding)
+            pygame.draw.rect(screen, WHITE, debug_rect)
+            pygame.draw.rect(screen, BLACK, debug_rect, 1)
+            
+            screen.blit(debug_surf, (debug_x, debug_y))
 
     def draw_loading_message(message):
         screen.fill(WHITE)
@@ -714,9 +867,10 @@ try:
         screen.blit(message_surf, (20, 50))
         
         # Draw instructions
+        back_button_name = get_button_name("back")
         instructions = [
             "Please wait...",
-            "Press A to cancel"
+            f"Press {back_button_name} to cancel"
         ]
         
         y = 100
@@ -725,7 +879,11 @@ try:
             screen.blit(inst_surf, (20, y))
             y += FONT_SIZE + 5
         
-        pygame.display.flip()
+        # Draw debug controller info
+        draw_debug_controller()
+        
+        if not show_game_details:
+            pygame.display.flip()
 
     def download_files(system, selected_game_indices):
         try:
@@ -782,7 +940,7 @@ try:
                         for chunk in r.iter_content(1024):
                             # Check for cancel button
                             for event in pygame.event.get():
-                                if event.type == pygame.JOYBUTTONDOWN and event.button == 3:
+                                if event.type == pygame.JOYBUTTONDOWN and event.button == get_controller_button("back"):
                                     cancelled = True
                                     break
                             if cancelled:
@@ -984,6 +1142,76 @@ try:
     os.makedirs(WORK_DIR, exist_ok=True)
     os.makedirs(ROMS_DIR, exist_ok=True)
 
+    # Debug controller variables
+    current_pressed_button = ""
+    last_button_time = 0
+    BUTTON_DISPLAY_TIME = 1000  # milliseconds
+    
+    # Controller-specific button mappings
+    CONTROLLER_MAPPINGS = {
+        "generic": {
+            0: "Button 0", 1: "Button 1", 2: "Button 2", 3: "Button 3", 4: "Button 4",
+            5: "Button 5", 6: "Button 6", 7: "Button 7", 8: "Button 8", 9: "Button 9",
+            10: "Button 10", 11: "Button 11", 12: "Button 12"
+        },
+        "xbox": {
+            0: "A", 1: "B", 2: "X", 3: "Y", 4: "Back", 5: "Guide", 6: "Start",
+            7: "L-Stick", 8: "R-Stick", 9: "LB", 10: "RB", 11: "D-Up", 12: "D-Down",
+            13: "D-Left", 14: "D-Right"
+        },
+        "playstation": {
+            0: "Cross", 1: "Circle", 2: "Square", 3: "Triangle", 4: "L1", 5: "R1",
+            6: "L2", 7: "R2", 8: "Share", 9: "Options", 10: "L3", 11: "R3",
+            12: "PS", 13: "Touchpad"
+        },
+        "nintendo": {
+            0: "B", 1: "A", 2: "Y", 3: "X", 4: "L", 5: "R", 6: "ZL", 7: "ZR",
+            8: "Minus", 9: "Plus", 10: "L-Stick", 11: "R-Stick", 12: "Home", 13: "Capture"
+        },
+        "rg35xx": {
+            0: "B", 1: "A", 2: "Y", 3: "X", 4: "L1", 5: "R1", 6: "L2", 7: "R2",
+            8: "Select", 9: "Start", 10: "Menu", 11: "L3", 12: "R3"
+        }
+    }
+    
+    # Controller-specific navigation mappings
+    CONTROLLER_NAVIGATION = {
+        "generic": {
+            "select": 4, "back": 3, "start": 10, "detail": 2, "left_shoulder": 6, "right_shoulder": 7
+        },
+        "xbox": {
+            "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 9, "right_shoulder": 10  # A, B, Start, Y, LB, RB
+        },
+        "playstation": {
+            "select": 0, "back": 1, "start": 9, "detail": 3, "left_shoulder": 4, "right_shoulder": 5  # Cross, Circle, Options, Triangle, L1, R1
+        },
+        "nintendo": {
+            "select": 1, "back": 0, "start": 9, "detail": 2, "left_shoulder": 4, "right_shoulder": 5  # A, B, Plus, Y, L, R
+        },
+        "rg35xx": {
+            "select": 1, "back": 0, "start": 9, "detail": 2, "left_shoulder": 4, "right_shoulder": 5  # A, B, Start, Y, L1, R1
+        }
+    }
+    
+    def get_controller_button(action):
+        """Get the button number for a specific action based on current controller type"""
+        controller_type = settings.get("controller_type", "rg35xx")
+        navigation_map = CONTROLLER_NAVIGATION.get(controller_type, CONTROLLER_NAVIGATION["rg35xx"])
+        return navigation_map.get(action)
+    
+    def get_button_name(action):
+        """Get the display name for a button action based on current controller type"""
+        controller_type = settings.get("controller_type", "rg35xx")
+        button_number = get_controller_button(action)
+        if button_number is None:
+            return action.upper()
+        button_mapping = CONTROLLER_MAPPINGS.get(controller_type, CONTROLLER_MAPPINGS["rg35xx"])
+        return button_mapping.get(button_number, f"Button {button_number}")
+
+    # Game details modal state
+    show_game_details = False
+    current_game_detail = None
+    
     # Main loop
     running = True
     button_delay = 0
@@ -1010,11 +1238,26 @@ try:
                     draw_loading_message("No games found for this system")
             elif mode == "settings":
                 draw_settings_menu()
+            
+            # Draw game details modal if it should be shown
+            if show_game_details and current_game_detail is not None:
+                draw_game_details_modal(current_game_detail)
+                pygame.display.flip()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
                 elif event.type == pygame.KEYDOWN:
+                    # Debug controller - capture keyboard presses
+                    if settings.get("debug_controller", False):
+                        key_names = {
+                            pygame.K_UP: "Up", pygame.K_DOWN: "Down", pygame.K_LEFT: "Left", pygame.K_RIGHT: "Right",
+                            pygame.K_RETURN: "Enter", pygame.K_ESCAPE: "Escape", pygame.K_SPACE: "Space", pygame.K_y: "Y"
+                        }
+                        key_name = key_names.get(event.key, f"Key-{event.key}")
+                        current_pressed_button = f"KEYBOARD: {key_name}"
+                        last_button_time = pygame.time.get_ticks()
+                    
                     # Keyboard controls (same logic as joystick)
                     if event.key == pygame.K_RETURN:  # Enter = Select (Button 4)
                         if mode == "systems":
@@ -1054,7 +1297,19 @@ try:
                             elif highlighted == 5:  # USA Games Only
                                 settings["usa_only"] = not settings["usa_only"]
                                 save_settings(settings)
-                            elif highlighted == 6:  # Work Directory
+                            elif highlighted == 6:  # Debug Controller
+                                settings["debug_controller"] = not settings["debug_controller"]
+                                save_settings(settings)
+                            elif highlighted == 7:  # Controller Type
+                                controller_types = ["generic", "xbox", "playstation", "nintendo", "rg35xx"]
+                                current_type = settings["controller_type"]
+                                try:
+                                    current_index = controller_types.index(current_type)
+                                    settings["controller_type"] = controller_types[(current_index + 1) % len(controller_types)]
+                                except ValueError:
+                                    settings["controller_type"] = controller_types[0]
+                                save_settings(settings)
+                            elif highlighted == 8:  # Work Directory
                                 # Cycle between common work directories for retro gaming systems
                                 current_work = settings["work_dir"]
                                 work_options = [
@@ -1072,7 +1327,7 @@ try:
                                 except ValueError:
                                     settings["work_dir"] = work_options[0]
                                 save_settings(settings)
-                            elif highlighted == 7:  # ROMs Directory  
+                            elif highlighted == 9:  # ROMs Directory  
                                 # Cycle between common ROM directories for retro gaming systems
                                 current_roms = settings["roms_dir"]
                                 roms_options = [
@@ -1093,8 +1348,17 @@ try:
                                 except ValueError:
                                     settings["roms_dir"] = roms_options[0]
                                 save_settings(settings)
+                    elif event.key == pygame.K_y:  # Y key = Detail view
+                        if mode == "games" and not show_game_details and game_list:
+                            # Show details modal for current game
+                            current_game_detail = game_list[highlighted]
+                            show_game_details = True
                     elif event.key == pygame.K_ESCAPE:  # Escape = Back (Button 3)
-                        if mode == "games":
+                        if show_game_details:
+                            # Close details modal
+                            show_game_details = False
+                            current_game_detail = None
+                        elif mode == "games":
                             mode = "systems"
                             highlighted = 0
                         elif mode == "settings":
@@ -1106,7 +1370,7 @@ try:
                             download_files(selected_system, selected_games)
                             mode = "systems"
                             highlighted = 0
-                    elif event.key == pygame.K_UP:
+                    elif event.key == pygame.K_UP and not show_game_details:
                         if mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move up
                             cols = 4
@@ -1123,7 +1387,7 @@ try:
                             
                             if max_items > 0:
                                 highlighted = (highlighted - 1) % max_items
-                    elif event.key == pygame.K_DOWN:
+                    elif event.key == pygame.K_DOWN and not show_game_details:
                         if mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move down
                             cols = 4
@@ -1140,7 +1404,7 @@ try:
                             
                             if max_items > 0:
                                 highlighted = (highlighted + 1) % max_items
-                    elif event.key == pygame.K_LEFT and mode == "games":
+                    elif event.key == pygame.K_LEFT and mode == "games" and not show_game_details:
                         if game_list:
                             if settings["view_type"] == "grid":
                                 # Grid navigation: move left
@@ -1150,7 +1414,7 @@ try:
                             else:
                                 # List navigation: jump to different letter
                                 highlighted = find_next_letter_index(game_list, highlighted, -1)
-                    elif event.key == pygame.K_RIGHT and mode == "games":
+                    elif event.key == pygame.K_RIGHT and mode == "games" and not show_game_details:
                         if game_list:
                             if settings["view_type"] == "grid":
                                 # Grid navigation: move right
@@ -1161,8 +1425,23 @@ try:
                                 # List navigation: jump to different letter
                                 highlighted = find_next_letter_index(game_list, highlighted, 1)
                 elif event.type == pygame.JOYBUTTONDOWN:
-                    # Button 4 = Select, Button 3 = Back, Button 10 = Start Download
-                    if event.button == 4:  # Select
+                    # Debug controller - capture joystick button presses
+                    if settings.get("debug_controller", False):
+                        controller_type = settings.get("controller_type", "generic")
+                        button_mapping = CONTROLLER_MAPPINGS.get(controller_type, CONTROLLER_MAPPINGS["generic"])
+                        button_name = button_mapping.get(event.button, f"Button-{event.button}")
+                        current_pressed_button = f"{controller_type.upper()}: {button_name}"
+                        last_button_time = pygame.time.get_ticks()
+                    
+                    # Controller-aware button mapping
+                    select_button = get_controller_button("select")
+                    back_button = get_controller_button("back")
+                    start_button = get_controller_button("start")
+                    detail_button = get_controller_button("detail")
+                    left_shoulder_button = get_controller_button("left_shoulder")
+                    right_shoulder_button = get_controller_button("right_shoulder")
+                    
+                    if event.button == select_button:  # Select
                         if mode == "systems":
                             systems_count = len(data)
                             if highlighted == systems_count:  # Settings option
@@ -1200,7 +1479,19 @@ try:
                             elif highlighted == 5:  # USA Games Only
                                 settings["usa_only"] = not settings["usa_only"]
                                 save_settings(settings)
-                            elif highlighted == 6:  # Work Directory
+                            elif highlighted == 6:  # Debug Controller
+                                settings["debug_controller"] = not settings["debug_controller"]
+                                save_settings(settings)
+                            elif highlighted == 7:  # Controller Type
+                                controller_types = ["generic", "xbox", "playstation", "nintendo", "rg35xx"]
+                                current_type = settings["controller_type"]
+                                try:
+                                    current_index = controller_types.index(current_type)
+                                    settings["controller_type"] = controller_types[(current_index + 1) % len(controller_types)]
+                                except ValueError:
+                                    settings["controller_type"] = controller_types[0]
+                                save_settings(settings)
+                            elif highlighted == 8:  # Work Directory
                                 # Cycle between common work directories for retro gaming systems
                                 current_work = settings["work_dir"]
                                 work_options = [
@@ -1218,7 +1509,7 @@ try:
                                 except ValueError:
                                     settings["work_dir"] = work_options[0]
                                 save_settings(settings)
-                            elif highlighted == 7:  # ROMs Directory  
+                            elif highlighted == 9:  # ROMs Directory  
                                 # Cycle between common ROM directories for retro gaming systems
                                 current_roms = settings["roms_dir"]
                                 roms_options = [
@@ -1239,21 +1530,30 @@ try:
                                 except ValueError:
                                     settings["roms_dir"] = roms_options[0]
                                 save_settings(settings)
-                    elif event.button == 3:  # Back
-                        if mode == "games":
+                    elif event.button == detail_button:  # Detail view
+                        if mode == "games" and not show_game_details and game_list:
+                            # Show details modal for current game
+                            current_game_detail = game_list[highlighted]
+                            show_game_details = True
+                    elif event.button == back_button:  # Back
+                        if show_game_details:
+                            # Close details modal
+                            show_game_details = False
+                            current_game_detail = None
+                        elif mode == "games":
                             mode = "systems"
                             highlighted = 0
                         elif mode == "settings":
                             mode = "systems"
                             highlighted = 0
-                    elif event.button == 6:  # Left shoulder - Previous page
+                    elif event.button == left_shoulder_button:  # Left shoulder - Previous page
                         if mode == "games" and data[selected_system].get('supports_pagination', False):
                             if current_page > 0:
                                 current_page -= 1
                                 game_list = list_files(selected_system, current_page)
                                 highlighted = 0
                                 selected_games = set()
-                    elif event.button == 7:  # Right shoulder - Next page
+                    elif event.button == right_shoulder_button:  # Right shoulder - Next page
                         if mode == "games" and data[selected_system].get('supports_pagination', False):
                             current_page += 1
                             new_games = list_files(selected_system, current_page)
@@ -1263,15 +1563,29 @@ try:
                                 selected_games = set()
                             else:
                                 current_page -= 1  # Revert if no games found
-                    elif event.button == 10:  # Start Download
+                    elif event.button == start_button:  # Start Download
                         if mode == "games" and selected_games:
                             draw_loading_message("Starting download...")
                             download_files(selected_system, selected_games)
                             mode = "systems"
                             highlighted = 0
                 elif event.type == pygame.JOYHATMOTION:
+                    # Debug controller - capture D-pad/hat movement
+                    if settings.get("debug_controller", False):
+                        hat = joystick.get_hat(0)
+                        if hat != (0, 0):
+                            controller_type = settings.get("controller_type", "generic")
+                            direction = ""
+                            if hat[1] == 1: direction = "Up"
+                            elif hat[1] == -1: direction = "Down"
+                            elif hat[0] == -1: direction = "Left"
+                            elif hat[0] == 1: direction = "Right"
+                            else: direction = f"{hat}"
+                            current_pressed_button = f"{controller_type.upper()}: D-Pad {direction}"
+                            last_button_time = pygame.time.get_ticks()
+                    
                     hat = joystick.get_hat(0)
-                    if hat[1] != 0:  # Up or Down
+                    if hat[1] != 0 and not show_game_details:  # Up or Down
                         if mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move up/down
                             cols = 4
@@ -1292,7 +1606,7 @@ try:
                             
                             if max_items > 0:
                                 highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
-                    elif hat[0] != 0 and mode == "games":  # Left or Right (only in games mode)
+                    elif hat[0] != 0 and mode == "games" and not show_game_details:  # Left or Right (only in games mode)
                         if settings["view_type"] == "grid":
                             # Grid navigation: move left/right
                             cols = 4
