@@ -9,3 +9,5 @@ dependencies:
   - pip
   - pip:
     - requests
+    - pyinstaller
+    - watchdog
