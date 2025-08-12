@@ -1755,6 +1755,10 @@ try:
         "xbox": {
             0: "A", 1: "B", 3: "Y", 6: "Start", 9: "LB", 10: "RB"
         },
+        "odin": {
+            1: "A", 0: "B", 2: "Y", 6: "Start", 9: "LB", 10: "RB",
+            11: "D-Up", 12: "D-Down", 13: "D-Left", 14: "D-Right"
+        },
         "playstation": {
             0: "Cross", 1: "Circle", 3: "Triangle", 9: "L1", 10: "R1", 6: "Options"
         },
@@ -1772,6 +1776,9 @@ try:
             "select": 4, "back": 3, "start": 10, "detail": 2, "left_shoulder": 6, "right_shoulder": 7, "create_folder": 6
         },
         "xbox": {
+            "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 9, "right_shoulder": 10, "create_folder": 9  # A, B, Start, Y, LB, RB, LB
+        },
+        "odin": {
             "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 9, "right_shoulder": 10, "create_folder": 9  # A, B, Start, Y, LB, RB, LB
         },
         "playstation": {
@@ -2093,7 +2100,7 @@ try:
                                 settings["debug_controller"] = not settings["debug_controller"]
                                 save_settings(settings)
                             elif highlighted == 7:  # Controller Type
-                                controller_types = ["generic", "xbox", "playstation", "nintendo", "rg35xx"]
+                                controller_types = ["generic", "xbox", "odin", "playstation", "nintendo", "rg35xx"]
                                 current_type = settings["controller_type"]
                                 try:
                                     current_index = controller_types.index(current_type)
@@ -2497,6 +2504,122 @@ try:
                     
                     # Debug: Show all button presses
                     print(f"Joystick button pressed: {event.button}")
+                    
+                    # Handle Odin-specific directional buttons (11=up, 14=right, 12=down, 13=left)
+                    controller_type = settings.get("controller_type", "rg35xx")
+                    if controller_type == "odin" and event.button in [11, 12, 13, 14]:
+                        # Convert Odin directional buttons to D-pad-like navigation
+                        if event.button == 11:  # Up
+                            hat = (0, 1)
+                        elif event.button == 12:  # Down
+                            hat = (0, -1)
+                        elif event.button == 13:  # Left
+                            hat = (0, -1)
+                        elif event.button == 14:  # Right
+                            hat = (1, 0)
+                        
+                        # Process as D-pad navigation
+                        movement_occurred = False
+                        
+                        if hat[1] != 0 and not show_game_details:  # Up or Down
+                            if show_folder_name_input:
+                                # Navigate character selection up/down
+                                chars_per_row = 13
+                                total_chars = 36  # A-Z + 0-9
+                                if hat[1] == 1:  # Up
+                                    if folder_name_char_index >= chars_per_row:
+                                        folder_name_char_index -= chars_per_row
+                                        movement_occurred = True
+                                else:  # Down
+                                    if folder_name_char_index + chars_per_row < total_chars:
+                                        folder_name_char_index += chars_per_row
+                                        movement_occurred = True
+                            elif show_folder_browser:
+                                # Folder browser navigation
+                                if hat[1] == 1:  # Up
+                                    if folder_browser_items and folder_browser_highlighted > 0:
+                                        folder_browser_highlighted -= 1
+                                        movement_occurred = True
+                                else:  # Down
+                                    if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
+                                        folder_browser_highlighted += 1
+                                        movement_occurred = True
+                            elif mode == "add_systems":
+                                # Add systems navigation
+                                if hat[1] == 1:  # Up
+                                    if available_systems and add_systems_highlighted > 0:
+                                        add_systems_highlighted -= 1
+                                        movement_occurred = True
+                                else:  # Down
+                                    if available_systems and add_systems_highlighted < len(available_systems) - 1:
+                                        add_systems_highlighted += 1
+                                        movement_occurred = True
+                            elif mode == "games" and settings["view_type"] == "grid":
+                                # Grid navigation: move up/down
+                                cols = 4
+                                if hat[1] == 1:  # Up
+                                    if highlighted >= cols:
+                                        highlighted -= cols
+                                        movement_occurred = True
+                                else:  # Down
+                                    if highlighted + cols < len(game_list):
+                                        highlighted += cols
+                                        movement_occurred = True
+                            else:
+                                # Regular navigation for list view and other modes
+                                if mode == "games":
+                                    max_items = len(game_list)
+                                elif mode == "settings":
+                                    max_items = len(settings_list)
+                                elif mode == "add_systems":
+                                    max_items = len(available_systems)
+                                else:  # systems
+                                    regular_systems = [d for d in data if not d.get('list_systems', False)]
+                                    max_items = len(regular_systems) + 2  # +2 for Add Systems and Settings options
+                                
+                                if max_items > 0:
+                                    if mode == "add_systems":
+                                        add_systems_highlighted = (add_systems_highlighted - 1) % max_items if hat[1] == 1 else (add_systems_highlighted + 1) % max_items
+                                    else:
+                                        highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
+                                    movement_occurred = True
+                        elif hat[0] != 0 and not show_game_details:  # Left or Right
+                            if show_folder_name_input:
+                                # Navigate character selection left/right
+                                chars_per_row = 13
+                                total_chars = 36  # A-Z + 0-9
+                                if hat[0] < 0:  # Left
+                                    if folder_name_char_index % chars_per_row > 0:
+                                        folder_name_char_index -= 1
+                                        movement_occurred = True
+                                else:  # Right
+                                    if folder_name_char_index % chars_per_row < chars_per_row - 1 and folder_name_char_index < total_chars - 1:
+                                        folder_name_char_index += 1
+                                        movement_occurred = True
+                            elif mode == "games" and settings["view_type"] == "grid":
+                                # Grid navigation: move left/right
+                                cols = 4
+                                if hat[0] < 0:  # Left
+                                    if highlighted % cols > 0:
+                                        highlighted -= 1
+                                        movement_occurred = True
+                                else:  # Right
+                                    if highlighted % cols < cols - 1 and highlighted < len(game_list) - 1:
+                                        highlighted += 1
+                                        movement_occurred = True
+                            else:
+                                # List navigation: jump to different letter
+                                items = game_list
+                                old_highlighted = highlighted
+                                if hat[0] < 0:  # Left
+                                    highlighted = find_next_letter_index(items, highlighted, -1)
+                                else:  # Right
+                                    highlighted = find_next_letter_index(items, highlighted, 1)
+                                if highlighted != old_highlighted:
+                                    movement_occurred = True
+                        
+                        # Skip regular button processing for Odin directional buttons
+                        continue
                     
                     # Controller-aware button mapping
                     select_button = get_controller_button("select")
