@@ -171,7 +171,40 @@ try:
         except Exception as e:
             log_error("Failed to save settings", type(e).__name__, traceback.format_exc())
 
-    def load_image_async(url, cache_key):
+    def get_game_initials(game_name):
+        """Extract first 3 initials from game name"""
+        if not game_name:
+            return "GAM"
+        
+        # Remove file extension and common brackets/parentheses content
+        clean_name = os.path.splitext(game_name)[0]
+        clean_name = re.sub(r'\[.*?\]|\(.*?\)', '', clean_name).strip()
+        
+        # Split into words and get initials
+        words = clean_name.split()
+        initials = ""
+        
+        for word in words:
+            if word and word[0].isalpha():
+                initials += word[0].upper()
+                if len(initials) >= 3:
+                    break
+        
+        # Pad with game name characters if not enough initials
+        if len(initials) < 3:
+            for char in clean_name:
+                if char.isalpha() and char.upper() not in initials:
+                    initials += char.upper()
+                    if len(initials) >= 3:
+                        break
+        
+        # Fallback if still not enough
+        while len(initials) < 3:
+            initials += "X"
+        
+        return initials[:3]
+
+    def load_image_async(url, cache_key, game_name=None):
         """Load image in background thread"""
         try:
             response = requests.get(url, timeout=10)
@@ -188,6 +221,28 @@ try:
             image_queue.put((cache_key, scaled_image))
         except Exception as e:
             log_error(f"Failed to load image from {url}", type(e).__name__, traceback.format_exc())
+            
+            # Try placeholder image if game name is available
+            if game_name:
+                try:
+                    initials = get_game_initials(game_name)
+                    placeholder_url = f"https://placehold.co/50x50?text={initials}"
+                    response = requests.get(placeholder_url, timeout=5)
+                    response.raise_for_status()
+                    
+                    # Load placeholder image from bytes
+                    image_data = BytesIO(response.content)
+                    image = pygame.image.load(image_data)
+                    
+                    # Scale to thumbnail size
+                    scaled_image = pygame.transform.scale(image, THUMBNAIL_SIZE)
+                    
+                    # Add to queue for main thread to process
+                    image_queue.put((cache_key, scaled_image))
+                    return
+                except Exception:
+                    pass  # Fallback to None if placeholder also fails
+            
             # Put None to indicate failed load
             image_queue.put((cache_key, None))
 
@@ -229,7 +284,8 @@ try:
             
             if isinstance(game_item, dict) and ('banner_url' in game_item or 'icon_url' in game_item):
                 # Switch format - load direct URL
-                thread = Thread(target=load_image_async, args=(image_url, cache_key))
+                game_name = game_item.get('name', '')
+                thread = Thread(target=load_image_async, args=(image_url, cache_key, game_name))
                 thread.daemon = True
                 thread.start()
             else:
@@ -237,13 +293,13 @@ try:
                 game_name = game_item if isinstance(game_item, str) else game_item.get('name', '')
                 base_name = os.path.splitext(game_name)[0]
                 image_formats = [".png", ".jpg", ".jpeg", ".gif", ".bmp"]
-                thread = Thread(target=load_image_with_fallback, args=(boxart_url, base_name, image_formats, cache_key))
+                thread = Thread(target=load_image_with_fallback, args=(boxart_url, base_name, image_formats, cache_key, game_name))
                 thread.daemon = True
                 thread.start()
         
         return None  # Not ready yet
 
-    def load_image_with_fallback(base_url, base_name, formats, cache_key):
+    def load_image_with_fallback(base_url, base_name, formats, cache_key, game_name=None):
         """Try loading image with different format extensions"""
         for fmt in formats:
             try:
@@ -265,7 +321,28 @@ try:
             except Exception:
                 continue  # Try next format
         
-        # All formats failed
+        # All formats failed - try placeholder image
+        if game_name:
+            try:
+                initials = get_game_initials(game_name)
+                placeholder_url = f"https://placehold.co/50x50?text={initials}"
+                response = requests.get(placeholder_url, timeout=5)
+                response.raise_for_status()
+                
+                # Load placeholder image from bytes
+                image_data = BytesIO(response.content)
+                image = pygame.image.load(image_data)
+                
+                # Scale to thumbnail size
+                scaled_image = pygame.transform.scale(image, THUMBNAIL_SIZE)
+                
+                # Add to queue for main thread to process
+                image_queue.put((cache_key, scaled_image))
+                return
+            except Exception:
+                pass  # Fallback to None if placeholder also fails
+        
+        # All attempts failed
         image_queue.put((cache_key, None))
 
     def update_image_cache():
@@ -740,17 +817,21 @@ try:
 
     def draw_game_details_modal(game_item):
         """Draw the game details modal overlay"""
+        # Get actual screen dimensions
+        screen_width, screen_height = screen.get_size()
+        
         # Semi-transparent background overlay
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay = pygame.Surface((screen_width, screen_height))
         overlay.set_alpha(128)
         overlay.fill(BLACK)
         screen.blit(overlay, (0, 0))
         
-        # Modal background
-        modal_width = 500
-        modal_height = 400
-        modal_x = (SCREEN_WIDTH - modal_width) // 2
-        modal_y = (SCREEN_HEIGHT - modal_height) // 2
+        # Responsive modal sizing
+        # Use 90% of screen width/height but with min/max constraints
+        modal_width = min(max(int(screen_width * 0.9), 300), 500)
+        modal_height = min(max(int(screen_height * 0.8), 250), 400)
+        modal_x = (screen_width - modal_width) // 2
+        modal_y = (screen_height - modal_height) // 2
         
         modal_rect = pygame.Rect(modal_x, modal_y, modal_width, modal_height)
         pygame.draw.rect(screen, WHITE, modal_rect)
@@ -769,8 +850,9 @@ try:
         screen.blit(title_surf, (title_x, title_y))
         
         # Draw game name (with text wrapping if needed)
+        margin = max(20, int(modal_width * 0.05))  # Responsive margin (5% of width, min 20px)
         name_y = title_y + 40
-        max_name_width = modal_width - 40
+        max_name_width = modal_width - (margin * 2)
         
         # Simple text wrapping
         words = game_name.split()
@@ -793,9 +875,10 @@ try:
             lines.append(' '.join(current_line))
         
         # Draw wrapped text
-        for i, line in enumerate(lines[:3]):  # Limit to 3 lines
+        max_lines = max(2, min(3, modal_height // 100))  # Responsive line count based on modal height
+        for i, line in enumerate(lines[:max_lines]):
             name_surf = font.render(line, True, GREEN)
-            screen.blit(name_surf, (modal_x + 20, name_y + i * (FONT_SIZE + 5)))
+            screen.blit(name_surf, (modal_x + margin, name_y + i * (FONT_SIZE + 5)))
         
         # Draw large image if available
         image_y = name_y + len(lines) * (FONT_SIZE + 5) + 20
@@ -803,9 +886,20 @@ try:
         thumbnail = get_thumbnail(game_item, boxart_url)
         
         if thumbnail and thumbnail != "loading":
-            # Scale image to be larger (up to 256x256)
-            large_size = (256, 256)
+            # Calculate appropriate image size that fits within modal responsively
+            available_width = modal_width - (margin * 2)  # Use responsive margins
+            available_height = modal_height - (image_y - modal_y) - (margin * 3)  # Space for instructions
+            # Scale max image size based on modal size, but set reasonable limits
+            max_image_size = min(available_width, available_height, min(modal_width // 2, 200))
+            
             try:
+                # Scale image proportionally to fit within the available space
+                original_size = thumbnail.get_size()
+                scale_factor = min(max_image_size / original_size[0], max_image_size / original_size[1])
+                new_width = int(original_size[0] * scale_factor)
+                new_height = int(original_size[1] * scale_factor)
+                large_size = (new_width, new_height)
+                
                 large_image = pygame.transform.scale(thumbnail, large_size)
                 image_x = modal_x + (modal_width - large_size[0]) // 2
                 screen.blit(large_image, (image_x, image_y))
@@ -824,12 +918,22 @@ try:
             no_image_x = modal_x + (modal_width - no_image_surf.get_width()) // 2
             screen.blit(no_image_surf, (no_image_x, image_y))
         
-        # Instructions with padding
+        # Instructions with responsive positioning
         back_button_name = get_button_name("back")
         instruction_text = f"Press {back_button_name} to close"
         instruction_surf = font.render(instruction_text, True, WHITE)
         instruction_x = modal_x + (modal_width - instruction_surf.get_width()) // 2
-        instruction_y = modal_y + modal_height + 20  # Added 20px more padding
+        
+        # Position instructions either below modal or at bottom of screen if modal is too tall
+        instruction_y_below = modal_y + modal_height + margin
+        instruction_y_bottom = screen_height - 30
+        
+        # Use whichever position fits better on screen
+        if instruction_y_below + instruction_surf.get_height() <= screen_height - 10:
+            instruction_y = instruction_y_below
+        else:
+            instruction_y = instruction_y_bottom
+            
         screen.blit(instruction_surf, (instruction_x, instruction_y))
 
     def draw_debug_controller():
@@ -1030,7 +1134,11 @@ try:
                         'screenshots_urls': game_data.get('screenshots_urls', [])
                     })
                 
-                # Switch games are not filtered for USA
+                # Apply USA filter if enabled and system supports it
+                if settings.get("usa_only", False) and sys_data.get('should_filter_usa', True):
+                    usa_regex = sys_data.get('usa_regex', '(USA)')
+                    files = [f for f in files if re.search(usa_regex, f['name'])]
+                
                 return sorted(files, key=lambda x: x['name'])
             
             # Check if this is the old JSON API format
@@ -1046,9 +1154,10 @@ try:
                     files = response[array_path]
                     if isinstance(files, list):
                         filtered_files = [f[file_id] for f in files if any(f[file_id].lower().endswith(ext.lower()) for ext in formats)]
-                        # Apply USA filter if enabled
-                        if settings.get("usa_only", False):
-                            filtered_files = [f for f in filtered_files if "(USA)" in f]
+                        # Apply USA filter if enabled and system supports it
+                        if settings.get("usa_only", False) and sys_data.get('should_filter_usa', True):
+                            usa_regex = sys_data.get('usa_regex', '(USA)')
+                            filtered_files = [f for f in filtered_files if re.search(usa_regex, f)]
                         return filtered_files
             
             elif 'url' in sys_data:
@@ -1090,9 +1199,10 @@ try:
                         if any(filename.lower().endswith(ext.lower()) for ext in formats):
                             files.append(filename)
                 
-                # Apply USA filter if enabled
-                if settings.get("usa_only", False):
-                    files = [f for f in files if "(USA)" in f]
+                # Apply USA filter if enabled and system supports it
+                if settings.get("usa_only", False) and sys_data.get('should_filter_usa', True):
+                    usa_regex = sys_data.get('usa_regex', '(USA)')
+                    files = [f for f in files if re.search(usa_regex, f)]
                 
                 return sorted(files)
             
@@ -1169,9 +1279,10 @@ try:
             8: "Minus", 9: "Plus", 10: "L-Stick", 11: "R-Stick", 12: "Home", 13: "Capture"
         },
         "rg35xx": {
-            0: "B", 1: "A", 2: "Y", 3: "X", 4: "L1", 5: "R1", 6: "L2", 7: "R2",
-            8: "Select", 9: "Start", 10: "Menu", 11: "L3", 12: "R3"
-        }
+            0: "Button 0", 1: "Button 1", 2: "Button B", 3: "Button A", 4: "Button B",
+            5: "Button 5", 6: "Button X", 7: "Button L", 8: "Button R", 9: "SELECT",
+            10: "Button 10", 11: "Button 11", 12: "Button 12"
+        },
     }
     
     # Controller-specific navigation mappings
@@ -1189,7 +1300,7 @@ try:
             "select": 1, "back": 0, "start": 9, "detail": 2, "left_shoulder": 4, "right_shoulder": 5  # A, B, Plus, Y, L, R
         },
         "rg35xx": {
-            "select": 1, "back": 0, "start": 9, "detail": 2, "left_shoulder": 4, "right_shoulder": 5  # A, B, Start, Y, L1, R1
+            "select": 3, "back": 4, "start": 9, "detail": 6, "left_shoulder": 7, "right_shoulder": 8
         }
     }
     
@@ -1215,6 +1326,9 @@ try:
     # Main loop
     running = True
     button_delay = 0
+    last_dpad_state = (0, 0)  # Track last D-pad state to detect actual changes
+    last_dpad_time = 0  # Track when last D-pad navigation occurred
+    DPAD_DEBOUNCE_MS = 100  # Minimum time between D-pad navigation actions
 
     while running:
         try:
@@ -1371,6 +1485,9 @@ try:
                             mode = "systems"
                             highlighted = 0
                     elif event.key == pygame.K_UP and not show_game_details:
+                        # Skip keyboard navigation if joystick is connected (prevents double input)
+                        if joystick is not None:
+                            continue
                         if mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move up
                             cols = 4
@@ -1388,6 +1505,9 @@ try:
                             if max_items > 0:
                                 highlighted = (highlighted - 1) % max_items
                     elif event.key == pygame.K_DOWN and not show_game_details:
+                        # Skip keyboard navigation if joystick is connected (prevents double input)
+                        if joystick is not None:
+                            continue
                         if mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move down
                             cols = 4
@@ -1405,6 +1525,9 @@ try:
                             if max_items > 0:
                                 highlighted = (highlighted + 1) % max_items
                     elif event.key == pygame.K_LEFT and mode == "games" and not show_game_details:
+                        # Skip keyboard navigation if joystick is connected (prevents double input)
+                        if joystick is not None:
+                            continue
                         if game_list:
                             if settings["view_type"] == "grid":
                                 # Grid navigation: move left
@@ -1415,6 +1538,9 @@ try:
                                 # List navigation: jump to different letter
                                 highlighted = find_next_letter_index(game_list, highlighted, -1)
                     elif event.key == pygame.K_RIGHT and mode == "games" and not show_game_details:
+                        # Skip keyboard navigation if joystick is connected (prevents double input)
+                        if joystick is not None:
+                            continue
                         if game_list:
                             if settings["view_type"] == "grid":
                                 # Grid navigation: move right
@@ -1570,21 +1696,34 @@ try:
                             mode = "systems"
                             highlighted = 0
                 elif event.type == pygame.JOYHATMOTION:
-                    # Debug controller - capture D-pad/hat movement
-                    if settings.get("debug_controller", False):
-                        hat = joystick.get_hat(0)
-                        if hat != (0, 0):
-                            controller_type = settings.get("controller_type", "generic")
-                            direction = ""
-                            if hat[1] == 1: direction = "Up"
-                            elif hat[1] == -1: direction = "Down"
-                            elif hat[0] == -1: direction = "Left"
-                            elif hat[0] == 1: direction = "Right"
-                            else: direction = f"{hat}"
-                            current_pressed_button = f"{controller_type.upper()}: D-Pad {direction}"
-                            last_button_time = pygame.time.get_ticks()
-                    
                     hat = joystick.get_hat(0)
+                    
+                    # Debug controller - capture D-pad movement
+                    if settings.get("debug_controller", False) and hat != (0, 0):
+                        controller_type = settings.get("controller_type", "generic")
+                        direction = ""
+                        if hat[1] == 1: direction = "Up"
+                        elif hat[1] == -1: direction = "Down"
+                        elif hat[0] == -1: direction = "Left"
+                        elif hat[0] == 1: direction = "Right"
+                        else: direction = f"{hat}"
+                        current_pressed_button = f"{controller_type.upper()}: D-Pad {direction}"
+                        last_button_time = pygame.time.get_ticks()
+                    
+                    # Only process if D-pad state actually changed
+                    if hat == last_dpad_state:
+                        continue
+                    
+                    # Ignore release events (0,0) - only process actual direction presses
+                    if hat == (0, 0):
+                        last_dpad_state = hat  # Update state but don't process navigation
+                        continue
+                    
+                    # Update last state
+                    last_dpad_state = hat
+                    
+                    movement_occurred = False
+                    
                     if hat[1] != 0 and not show_game_details:  # Up or Down
                         if mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move up/down
@@ -1592,9 +1731,11 @@ try:
                             if hat[1] == 1:  # Up
                                 if highlighted >= cols:
                                     highlighted -= cols
+                                    movement_occurred = True
                             else:  # Down
                                 if highlighted + cols < len(game_list):
                                     highlighted += cols
+                                    movement_occurred = True
                         else:
                             # Regular navigation for list view and other modes
                             if mode == "games":
@@ -1606,6 +1747,7 @@ try:
                             
                             if max_items > 0:
                                 highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
+                                movement_occurred = True
                     elif hat[0] != 0 and mode == "games" and not show_game_details:  # Left or Right (only in games mode)
                         if settings["view_type"] == "grid":
                             # Grid navigation: move left/right
@@ -1613,16 +1755,23 @@ try:
                             if hat[0] < 0:  # Left
                                 if highlighted % cols > 0:
                                     highlighted -= 1
+                                    movement_occurred = True
                             else:  # Right
                                 if highlighted % cols < cols - 1 and highlighted < len(game_list) - 1:
                                     highlighted += 1
+                                    movement_occurred = True
                         else:
                             # List navigation: jump to different letter
                             items = game_list
+                            old_highlighted = highlighted
                             if hat[0] < 0:  # Left
                                 highlighted = find_next_letter_index(items, highlighted, -1)
                             else:  # Right
                                 highlighted = find_next_letter_index(items, highlighted, 1)
+                            if highlighted != old_highlighted:
+                                movement_occurred = True
+                    
+                    # Movement tracking complete
 
 
         except Exception as e:

@@ -5,6 +5,8 @@
     "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".bin", ".cue", ".iso", ".zip"],
     "roms_folder": "psx",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/",
     "should_unzip": true
   },
@@ -13,6 +15,8 @@
     "url": "https://myrient.erista.me/files/Redump/Sony%20-%20PlayStation%202/",
     "file_format": [".iso", ".zip"],
     "roms_folder": "ps2",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Sony%20-%20PlayStation%202/Named_Boxarts/",
     "should_unzip": true
   },
@@ -21,6 +25,8 @@
     "url": "https://myrient.erista.me/files/Redump/Sony%20-%20PlayStation%203/",
     "file_format": [".iso", ".pkg", ".zip"],
     "roms_folder": "ps3",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "should_unzip": true
   },
   {
@@ -28,6 +34,8 @@
     "url": "https://myrient.erista.me/files/Redump/Sony%20-%20PlayStation%20Portable/",
     "file_format": [".iso", ".cso", ".zip"],
     "roms_folder": "psp",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Sony%20-%20PlayStation%20Portable/Named_Boxarts/",
     "should_unzip": true
   },
@@ -36,6 +44,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy%20%28Aftermarket%29/",
     "file_format": [".gb", ".zip"],
     "roms_folder": "gb",
+    "usa_regex": "(USA)",
+    "should_filter_usa": false,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy/Named_Boxarts/",
     "should_unzip": true
   },  {
@@ -43,6 +53,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy/",
     "file_format": [".gb", ".zip"],
     "roms_folder": "gb",
+    "usa_regex": "(USA)",
+    "should_filter_usa": false,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy/Named_Boxarts/",
     "should_unzip": true
   },
@@ -51,6 +63,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy%20Color/",
     "file_format": [".gbc", ".zip"],
     "roms_folder": "gbc",
+    "usa_regex": "(USA)",
+    "should_filter_usa": false,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Color/Named_Boxarts/",
     "should_unzip": true
   },
@@ -59,6 +73,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy%20Advance/",
     "file_format": [".gba", ".zip"],
     "roms_folder": "gba",
+    "usa_regex": "(USA)",
+    "should_filter_usa": false,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Boxarts/",
     "should_unzip": true
   },
@@ -67,6 +83,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Nintendo%20DS%20%28Decrypted%29/",
     "file_format": [".nds", ".zip"],
     "roms_folder": "nds",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20DS/Named_Boxarts/",
     "should_unzip": true
   },
@@ -75,6 +93,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Nintendo%203DS%20%28Decrypted%29/",
     "file_format": [".3ds", ".cia", ".zip"],
     "roms_folder": "n3ds",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%203DS/Named_Boxarts/",
     "should_unzip": true
   },
@@ -83,6 +103,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Nintendo%20Entertainment%20System%20%28Headered%29/",
     "file_format": [".nes", ".zip"],
     "roms_folder": "nes",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/",
     "should_unzip": true
   },
@@ -91,6 +113,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/",
     "file_format": [".sfc", ".smc", ".zip"],
     "roms_folder": "snes",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/",
     "should_unzip": true
   },
@@ -99,6 +123,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Nintendo%2064%20%28BigEndian%29/",
     "file_format": [".n64", ".z64", ".zip"],
     "roms_folder": "n64",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/",
     "should_unzip": true
   },
@@ -107,6 +133,8 @@
     "url": "https://myrient.erista.me/files/Redump/Nintendo%20-%20GameCube%20-%20NKit%20RVZ%20%5Bzstd-19-128k%5D/",
     "file_format": [".rvz", ".iso", ".zip"],
     "roms_folder": "gc",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Boxarts/",
     "should_unzip": true
   },
@@ -115,6 +143,8 @@
     "url": "https://myrient.erista.me/files/Redump/Nintendo%20-%20Wii%20-%20NKit%20RVZ%20%5Bzstd-19-128k%5D/",
     "file_format": [".rvz", ".iso", ".zip"],
     "roms_folder": "wii",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Wii/Named_Boxarts/",
     "should_unzip": true
   },
@@ -123,6 +153,8 @@
     "url": "https://myrient.erista.me/files/Redump/Nintendo%20-%20Wii%20U%20-%20WUX/",
     "file_format": [".wux", ".zip"],
     "roms_folder": "wiiu",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Nintendo%20-%20Wii%20U/Named_Boxarts/",
     "should_unzip": true
   },
@@ -131,6 +163,8 @@
     "url": "https://myrient.erista.me/files/Redump/Microsoft%20-%20Xbox/",
     "file_format": [".iso", ".zip"],
     "roms_folder": "xbox",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Microsoft%20-%20Xbox/Named_Boxarts/",
     "should_unzip": true
   },
@@ -139,6 +173,8 @@
     "url": "https://myrient.erista.me/files/Redump/Microsoft%20-%20Xbox%20360/",
     "file_format": [".iso", ".zip"],
     "roms_folder": "xbox360",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "should_unzip": true
   },
   {
@@ -146,6 +182,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Sega%20-%20Mega%20Drive%20-%20Genesis/",
     "file_format": [".md", ".gen", ".zip"],
     "roms_folder": "genesis",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Sega%20-%20Mega%20Drive%20-%20Genesis/Named_Boxarts/",
     "should_unzip": true
   },
@@ -154,6 +192,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Sega%20-%20Game%20Gear/",
     "file_format": [".gg", ".zip"],
     "roms_folder": "gamegear",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Sega%20-%20Game%20Gear/Named_Boxarts/",
     "should_unzip": true
   },
@@ -162,6 +202,8 @@
     "url": "https://myrient.erista.me/files/Redump/Sega%20-%20Saturn/",
     "file_format": [".cue", ".bin", ".zip"],
     "roms_folder": "saturn",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Sega%20-%20Saturn/Named_Boxarts/",
     "should_unzip": true
   },
@@ -170,6 +212,8 @@
     "url": "https://myrient.erista.me/files/Redump/Sega%20-%20Dreamcast/",
     "file_format": [".cue", ".gdi", ".zip"],
     "roms_folder": "dreamcast",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Sega%20-%20Dreamcast/Named_Boxarts/",
     "should_unzip": true
   },
@@ -178,6 +222,8 @@
     "url": "https://myrient.erista.me/files/Redump/Panasonic%20-%203DO%20Interactive%20Multiplayer/",
     "file_format": [".iso", ".cue", ".zip"],
     "roms_folder": "3do",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/The%203DO%20Company%20-%203DO/Named_Boxarts/",
     "should_unzip": true
   },
@@ -186,6 +232,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Coleco%20-%20ColecoVision/",
     "file_format": [".col", ".zip"],
     "roms_folder": "colecovision",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Coleco%20-%20ColecoVision/Named_Boxarts/",
     "should_unzip": true
   },
@@ -194,6 +242,8 @@
     "url": "https://myrient.erista.me/files/No-Intro/Mattel%20-%20Intellivision/",
     "file_format": [".int", ".zip"],
     "roms_folder": "intellivision",
+    "usa_regex": "(USA)",
+    "should_filter_usa": true,
     "boxarts": "https://thumbnails.libretro.com/Mattel%20-%20Intellivision/Named_Boxarts/",
     "should_unzip": true
   },
@@ -203,6 +253,8 @@
     "download_url": "https://wow-vicious.com/NSPdir/base/",
     "file_format": [".nsz", ".nsp", ".zip"],
     "roms_folder": "switch",
+    "usa_regex": "(USA)",
+    "should_filter_usa": false,
     "should_unzip": true,
     "use_api": true,
     "supports_pagination": true
