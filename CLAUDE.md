@@ -12,37 +12,47 @@ This is a PyGame-based ROM downloader application designed for handheld gaming c
 
 ### Setup Commands
 ```bash
-# Create and activate conda environment
+# Using Make (Recommended)
+make setup    # Create conda environment and install dependencies
+make run      # Run with auto-restart on file changes
+make help     # Show all available commands
+make clean    # Clean generated files and caches
+make format   # Format code with black
+make lint     # Lint code with flake8
+make build    # Create distribution package for console deployment
+
+# Manual Setup
 conda env create -f environment.yml
 conda activate roms_downloader
+pip install -e .[dev]
 
-# Alternative: Use Make for common tasks
-make setup    # Create conda environment
-make run      # Run the application
-make install  # Install in development mode
-make dev      # Install with dev dependencies
-make clean    # Clean generated files
-make help     # Show all available commands
-
-# Direct Python execution
+# Run application
 python src/index.py
 ```
 
 ### Dependencies
+**Runtime:**
 - Python 3.11+
 - pygame >= 2.0.0  
 - requests >= 2.25.0
+
+**Development:**
+- watchdog (auto-restart during development)
+- black (code formatting)
+- flake8 (linting)
+- pytest (testing framework)
 
 ## Architecture
 
 ### Core Components
 
 **Main Application (`src/index.py`)**: Single-file application containing:
-- **UI System**: PyGame-based interface with support for both D-pad and keyboard navigation
+- **UI System**: PyGame-based interface with D-pad and keyboard navigation
 - **Download Engine**: Multi-threaded downloading with progress tracking and resume capability
 - **Configuration Management**: JSON-based system configuration and user settings
 - **Image Caching**: Thumbnail loading and caching system for game artwork
-- **Multi-format Support**: Handles various game file formats and automatic extraction
+- **Multi-format Support**: Handles various game file formats and automatic ZIP extraction
+- **Platform Detection**: Auto-configures paths for Batocera vs development environments
 
 ### Key Features
 
@@ -81,8 +91,9 @@ Runtime settings stored in script directory:
 
 ### Environment Detection
 Application auto-detects platform and sets appropriate default paths:
-- Batocera: `/userdata/roms`, `/userdata/py_downloads`
-- Development: Script directory relative paths
+- **Batocera/Console**: `/userdata/roms`, `/userdata/py_downloads`
+- **Development**: Script directory relative paths (`./roms`, `./py_downloads`)
+- **Distribution**: Built using `make build` for console deployment
 
 ## Development Guidelines
 
@@ -98,6 +109,14 @@ All operations include comprehensive error logging to `error.log` with timestamp
 Designed for embedded Linux systems but runs on desktop for development. Control mapping supports both joystick (primary) and keyboard input.
 
 ### File Operations
-- Work directory for temporary downloads
-- Automatic cleanup of temporary files
-- Atomic file moves to prevent corruption
+- Work directory for temporary downloads with configurable location
+- Automatic cleanup of temporary files and failed downloads
+- Atomic file moves to prevent corruption during transfers
+- ZIP extraction with proper file organization
+- Image cache management with automatic thumbnail loading
+
+### Build System
+- **Makefile**: Provides common development tasks
+- **Conda Environment**: Isolated dependency management
+- **Distribution Building**: Creates console-ready files in `dist/` directory
+- **Code Quality**: Integrated formatting (black) and linting (flake8)

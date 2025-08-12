@@ -1,107 +1,158 @@
 # ROM Downloader
 
+![Screenshot](assets/images/screenshot.png)
+
 **Disclaimer: This application does not endorse any form of piracy. Only download games you legally own.**
 
-A PyGame-based ROM downloader designed for handheld gaming consoles, tested specifically with Knulli RG35xxSP.
+A PyGame-based ROM downloader designed for handheld gaming consoles, tested specifically with Knulli RG35xxSP. Features an interactive menu system with D-pad navigation, real-time download progress, and automatic file organization.
 
 ## Features
 
-- Interactive menu system with D-pad navigation
-- Multi-game selection and batch downloading
-- Real-time download progress with speed indicators
-- Automatic file extraction and organization
-- Error logging and recovery
-- Support for various file formats
+- **Interactive UI**: PyGame-based interface with D-pad and keyboard navigation
+- **Multiple View Modes**: List view and 4-column grid layout
+- **Multi-game Selection**: Batch downloading with real-time progress tracking
+- **Smart Download Management**: Resume capability and speed indicators
+- **Automatic Organization**: File extraction and proper directory structure
+- **Image Caching**: Thumbnail loading and caching for game artwork
+- **Platform Detection**: Auto-configures paths for Batocera and development environments
+- **Comprehensive Logging**: Error tracking and recovery mechanisms
 
 ## Installation
 
+### Development Setup
+
+#### Using Make (Recommended)
+```bash
+# Setup conda environment and dependencies
+make setup
+
+# Run the application with auto-restart on file changes
+make run
+
+# Other useful commands
+make help      # Show all available commands
+make clean     # Clean generated files
+make format    # Format code with black
+make lint      # Lint code with flake8
+make build     # Create distribution package for console
+```
+
+#### Manual Setup
+```bash
+# Create and activate conda environment
+conda env create -f environment.yml
+conda activate roms_downloader
+
+# Install in development mode
+pip install -e .[dev]
+
+# Run the application
+python src/index.py
+```
+
 ### Console Installation
 1. Create a `downloader` folder inside your console's `pygame` roms directory
-2. Copy `dw.pygame` and `download.json` to this folder
+2. Use `make build` to create distribution files, then copy `dist/dw.pygame` and `dist/download.json` to the console folder
 3. Configure `download.json` with your download sources
 4. Rescan games in EmulationStation
 5. Navigate to PyGame library and run the downloader
 
-### Development Setup
-1. Create conda environment:
-   ```bash
-   `conda env create -f environment.yml`
-   conda activate roms_downloader
-   ```
-
-2. Run locally:
-   ```bash
-   python dw.pygame
-   ```
-
 ## Configuration
 
-Edit `download.json` to configure your download sources:
+### System Configuration (`assets/config/download.json`)
+
+Configure gaming systems and download sources:
 
 ```json
 [
   {
     "name": "System Name",
-    "list_url": "URL to get JSON file list",
-    "list_json_file_location": "files",
-    "list_item_id": "name",
-    "download_url": "https://example.com/download",
-    "commands": [],
-    "file_format": [".iso", ".bin"],
-    "roms_folder": "system_folder"
+    "url": "https://example.com/roms/system/",
+    "file_format": [".iso", ".bin", ".zip"],
+    "roms_folder": "system_folder",
+    "regex": "href=\"([^\"]*\.(iso|bin|zip))\"",
+    "boxarts": "https://example.com/boxart/system/",
+    "should_unzip": true
   }
 ]
 ```
 
 ### Configuration Fields
 
-- `name`: Display name for the system
-- `list_url`: API endpoint returning JSON with available files
-- `list_json_file_location`: JSON property containing file array
-- `list_item_id`: Property name for file identifier
-- `download_url`: Base download URL (file ID will be appended)
-- `commands`: Shell commands for post-processing (not implemented)
+- `name`: Display name for the gaming system
+- `url`: Base URL for ROM directory listing (supports HTML parsing or JSON APIs)
 - `file_format`: Array of supported file extensions
-- `roms_folder`: Target folder within roms directory
+- `roms_folder`: Target directory within roms folder
+- `regex`: Custom regex for HTML parsing (optional)
+- `boxarts`: Base URL for game thumbnails (optional)
+- `should_unzip`: Automatically extract ZIP files after download
+
+### User Settings (`config.json`)
+
+Runtime settings are automatically created and stored:
+- Display preferences (thumbnails, view type)
+- Directory paths (work directory, ROM directory)
+- Cache settings and filtering options
 
 ## Controls
 
+### Navigation Modes
+- **Systems Mode**: Browse available gaming systems
+- **Games Mode**: Browse and select games within a system
+- **Settings Mode**: Configure application behavior
+
 ### System Selection
-- **D-pad Up/Down**: Navigate systems
-- **B Button**: Select system
-- **A Button**: Exit
+- **D-pad Up/Down** or **Arrow Keys**: Navigate systems
+- **B Button** or **Enter**: Select system
+- **A Button** or **Escape**: Exit application
+- **SELECT**: Toggle between list and grid view
 
 ### Game Selection
-- **D-pad Up/Down**: Navigate games
-- **D-pad Left/Right**: Jump to different letter
-- **B Button**: Toggle game selection
-- **A Button**: Return to systems
-- **START Button**: Begin download
+- **D-pad Up/Down** or **Arrow Keys**: Navigate games
+- **D-pad Left/Right** or **Page Up/Down**: Jump pages or letters
+- **B Button** or **Space**: Toggle game selection
+- **A Button** or **Escape**: Return to systems
+- **START** or **Enter**: Begin download
+- **SELECT**: Toggle view type and thumbnail display
 
 ### During Download
-- **A Button**: Cancel download
+- **A Button** or **Escape**: Cancel download
+- Real-time progress display with speed indicators
 
 ## Dependencies
 
 - Python 3.11+
 - pygame >= 2.0.0
 - requests >= 2.25.0
+- watchdog (development only)
+- black (development only)
+- flake8 (development only)
 
-## File Structure
+## Project Structure
 
 ```
 roms_downloader/
-├── dw.pygame          # Main application
-├── download.json      # Configuration file
-├── environment.yml    # Conda environment
-└── README.md         # Documentation
+├── src/
+│   └── index.py                    # Main application
+├── assets/
+│   ├── config/
+│   │   └── download.json          # System configuration
+│   └── images/
+│       └── screenshot.png         # Application screenshot
+├── dist/                          # Built distribution (created by make build)
+├── Makefile                       # Build and development commands
+├── environment.yml                # Conda environment specification
+├── pyproject.toml                 # Python project configuration
+├── CLAUDE.md                      # AI assistant instructions
+└── README.md                      # This documentation
 ```
 
 ## Compatibility
 
-- Tested with Knulli RG35xxSP
-- Should work with other Batocera-based systems
-- Compatible with Internet Archive downloads
+- **Primary Target**: Knulli RG35xxSP and other Batocera-based handheld consoles
+- **Development**: Cross-platform (Windows, macOS, Linux)
+- **Download Sources**: Supports multiple formats including HTML directory parsing, JSON APIs, and direct file downloads
+- **File Formats**: Handles various ROM formats with automatic extraction for ZIP archives
 
 ## Legal Notice and Disclaimer
 
@@ -131,4 +182,24 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 
 ## Troubleshooting
 
-Check `/userdata/roms/pygame/downloader/error.log` for detailed error information if the application encounters issues.
+### Error Logging
+- Check `error.log` in the application directory for detailed error information
+- On Batocera systems: `/userdata/roms/pygame/downloader/error.log`
+- Development: `error.log` in the project root
+
+### Common Issues
+- **No games showing**: Verify `download.json` configuration and network connectivity
+- **Download failures**: Check available disk space and directory permissions
+- **Display issues**: Ensure pygame dependencies are properly installed
+
+### Development
+```bash
+# Check code quality
+make lint
+
+# Format code
+make format
+
+# Clean build artifacts
+make clean
+```
