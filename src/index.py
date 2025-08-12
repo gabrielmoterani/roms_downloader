@@ -24,10 +24,12 @@ if DEV_MODE:
     JSON_FILE = os.path.join(SCRIPT_DIR, "..", "assets", "config", "download.json")
     LOG_FILE = os.path.join(SCRIPT_DIR, "..", "error.log")
     CONFIG_FILE = os.path.join(SCRIPT_DIR, "..", "config.json")
+    ADDED_SYSTEMS_FILE = os.path.join(SCRIPT_DIR, "..", "added_systems.json")
 else:
     JSON_FILE = os.path.join(SCRIPT_DIR, "download.json")
     LOG_FILE = os.path.join(SCRIPT_DIR, "error.log")
     CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
+    ADDED_SYSTEMS_FILE = os.path.join(SCRIPT_DIR, "added_systems.json")
 FPS = 30
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 FONT_SIZE = 28
@@ -599,6 +601,68 @@ try:
         # Draw debug controller info
         draw_debug_controller()
 
+    def draw_add_systems_menu():
+        screen.fill(WHITE)
+        y = 10
+        
+        # Draw title
+        title_surf = font.render("Add Systems", True, BLACK)
+        screen.blit(title_surf, (20, y))
+        y += FONT_SIZE + 10
+        
+        # Draw instructions
+        select_button_name = get_button_name("select")
+        back_button_name = get_button_name("back")
+        instructions = [
+            "Use D-pad to navigate",
+            f"Press {select_button_name} to add system",
+            f"Press {back_button_name} to go back"
+        ]
+        
+        for instruction in instructions:
+            inst_surf = font.render(instruction, True, GRAY)
+            screen.blit(inst_surf, (20, y))
+            y += FONT_SIZE + 5
+        
+        y += 20
+        
+        # Show loading message if no systems loaded yet
+        if not available_systems:
+            loading_surf = font.render("Loading available systems...", True, BLACK)
+            screen.blit(loading_surf, (20, y))
+        else:
+            # Calculate visible items for scrolling
+            screen_width, screen_height = screen.get_size()
+            available_height = screen_height - y - 50  # Leave space for debug info
+            items_per_screen = available_height // (FONT_SIZE + 10)
+            
+            # Calculate scroll offset to keep highlighted item visible
+            start_idx = max(0, add_systems_highlighted - items_per_screen // 2)
+            end_idx = min(len(available_systems), start_idx + items_per_screen)
+            
+            # Draw available systems list with scrolling
+            for i in range(start_idx, end_idx):
+                system = available_systems[i]
+                color = GREEN if i == add_systems_highlighted else BLACK
+                system_text = f"{system['name']} - {system.get('size', 'Unknown size')}"
+                system_surf = font.render(system_text, True, color)
+                screen.blit(system_surf, (20, y))
+                y += FONT_SIZE + 10
+            
+            # Show scroll indicator if needed
+            if len(available_systems) > items_per_screen:
+                if start_idx > 0:
+                    # Show up arrow
+                    up_arrow = font.render("↑", True, GRAY)
+                    screen.blit(up_arrow, (screen_width - 30, 10))
+                if end_idx < len(available_systems):
+                    # Show down arrow
+                    down_arrow = font.render("↓", True, GRAY)
+                    screen.blit(down_arrow, (screen_width - 30, screen_height - 30))
+        
+        # Draw debug controller info
+        draw_debug_controller()
+
     def draw_grid_view(title, items, selected_indices):
         screen.fill(WHITE)
         y = 10
@@ -987,7 +1051,11 @@ try:
         pygame.draw.rect(screen, BLACK, modal_rect, 3)
         
         # Title
-        title_surf = font.render("Select Folder", True, BLACK)
+        if selected_system_to_add is not None:
+            title_text = f"Select ROM Folder for {selected_system_to_add['name']}"
+        else:
+            title_text = "Select Folder"
+        title_surf = font.render(title_text, True, BLACK)
         title_x = modal_x + 20
         title_y = modal_y + 20
         screen.blit(title_surf, (title_x, title_y))
@@ -1005,13 +1073,22 @@ try:
         select_button_name = get_button_name("select")
         back_button_name = get_button_name("back")
         detail_button_name = get_button_name("detail")
+        create_folder_button_name = get_button_name("create_folder")
         
-        instructions = [
-            f"Use D-pad to navigate",
-            f"Press {select_button_name} to enter folder",
-            f"Press {detail_button_name} to select current folder",
-            f"Press {back_button_name} to cancel"
-        ]
+        if selected_system_to_add is not None:
+            instructions = [
+                f"Use D-pad to navigate",
+                f"Press {select_button_name} to enter folder or create new folder",
+                f"Press {detail_button_name} to select this folder for {selected_system_to_add['name']}",
+                f"Press {back_button_name} to cancel"
+            ]
+        else:
+            instructions = [
+                f"Use D-pad to navigate",
+                f"Press {select_button_name} to enter folder or create new folder",
+                f"Press {detail_button_name} to select current folder",
+                f"Press {back_button_name} to cancel"
+            ]
         
         inst_y = path_y + 35
         for instruction in instructions:
@@ -1042,6 +1119,11 @@ try:
         end_idx = min(start_idx + items_per_screen, total_items)
         visible_items = folder_browser_items[start_idx:end_idx]
         
+        # Debug: Print folder browser items
+        print(f"Folder browser items: {len(folder_browser_items)} total, highlighted: {folder_browser_highlighted}")
+        for i, item in enumerate(folder_browser_items):
+            print(f"  {i}: {item['name']} ({item['type']})")
+        
         for i, item in enumerate(visible_items):
             actual_idx = start_idx + i
             is_highlighted = actual_idx == folder_browser_highlighted
@@ -1053,6 +1135,8 @@ try:
             if item["type"] == "parent":
                 display_name = f"[DIR] {item['name']} (Go back)"
             elif item["type"] == "folder":
+                display_name = f"[DIR] {item['name']}"
+            elif item["type"] == "create_folder":
                 display_name = f"[DIR] {item['name']}"
             elif item["type"] == "error":
                 display_name = f"[ERR] {item['name']}"
@@ -1218,8 +1302,35 @@ try:
                     if filename.endswith(".zip") and sys_data.get('should_unzip', False):
                         draw_progress_bar(f"Extracting {filename}...", 0)
                         with ZipFile(file_path, 'r') as zip_ref:
-                            zip_ref.extractall(WORK_DIR)
-                        os.remove(file_path)
+                            # Get total number of files to extract
+                            total_files = len(zip_ref.namelist())
+                            extracted_files = 0
+                            
+                            # Extract files with progress tracking
+                            for file_info in zip_ref.infolist():
+                                zip_ref.extract(file_info, WORK_DIR)
+                                extracted_files += 1
+                                
+                                # Update progress every few files or for large files
+                                if extracted_files % 10 == 0 or file_info.file_size > 1024*1024:  # Every 10 files or files > 1MB
+                                    progress = int((extracted_files / total_files) * 100)
+                                    draw_progress_bar(f"Extracting {filename}... ({extracted_files}/{total_files})", progress)
+                                
+                                # Check for cancel button
+                                for event in pygame.event.get():
+                                    if event.type == pygame.JOYBUTTONDOWN and event.button == get_controller_button("back"):
+                                        cancelled = True
+                                        break
+                                if cancelled:
+                                    break
+                            
+                            # Show final extraction progress
+                            if not cancelled:
+                                draw_progress_bar(f"Extracting {filename}... Complete", 100)
+                                pygame.time.wait(500)  # Brief pause to show completion
+                        
+                        if not cancelled:
+                            os.remove(file_path)
 
                     # Move files to ROMS
                     draw_progress_bar(f"Moving files to ROMS folder...", 0)
@@ -1365,6 +1476,9 @@ try:
             if path != "/" and path != os.path.dirname(path):
                 items.append({"name": "..", "type": "parent", "path": os.path.dirname(path)})
             
+            # Add "Create New Folder" option
+            items.append({"name": "[CREATE NEW FOLDER]", "type": "create_folder", "path": path})
+            
             # Get directory contents
             if os.path.exists(path) and os.path.isdir(path):
                 try:
@@ -1391,6 +1505,183 @@ try:
             folder_browser_items = [{"name": "Error loading folder", "type": "error", "path": path}]
             folder_browser_highlighted = 0
             folder_browser_scroll_offset = 0
+
+    def load_available_systems():
+        """Load available systems from list_systems entries"""
+        global available_systems, add_systems_highlighted
+        
+        try:
+            # Find entries with list_systems: true
+            list_system_entries = [d for d in data if d.get('list_systems', False)]
+            if not list_system_entries:
+                available_systems = []
+                return
+            
+            # Use the first list_systems entry (assuming there's only one)
+            list_entry = list_system_entries[0]
+            url = list_entry['url']
+            regex_pattern = list_entry.get('regex', '')
+            
+            if not regex_pattern:
+                log_error("No regex pattern found in list_systems entry")
+                available_systems = []
+                return
+            
+            # Fetch the HTML content
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            html_content = response.text
+            
+            # Extract systems using regex
+            systems = []
+            matches = re.finditer(regex_pattern, html_content)
+            
+            for match in matches:
+                try:
+                    # Extract href, title, and other data from named groups
+                    href = match.group('href') if 'href' in match.groupdict() else ''
+                    title = match.group('title') if 'title' in match.groupdict() else ''
+                    text = match.group('text') if 'text' in match.groupdict() else ''
+                    size = match.group('size') if 'size' in match.groupdict() else ''
+                    
+                    # Use title as name, fallback to text
+                    name = title if title else text
+                    if name and href:
+                        # Basic cleanup - just remove trailing slash and whitespace
+                        name = name.strip().rstrip('/')
+                        
+                        # Skip if name is empty after cleaning or is navigation element
+                        if not name or name in ['..', '.', 'Parent Directory']:
+                            continue
+                        
+                        # Construct full URL
+                        full_url = urljoin(url, href)
+                        systems.append({
+                            'name': name,
+                            'href': href,
+                            'url': full_url,
+                            'size': size.strip() if size else ''
+                        })
+                except Exception as e:
+                    log_error(f"Error processing regex match: {match.groups()}", type(e).__name__, traceback.format_exc())
+                    continue
+            
+            available_systems = systems
+            add_systems_highlighted = 0
+            
+        except Exception as e:
+            log_error("Failed to load available systems", type(e).__name__, traceback.format_exc())
+            available_systems = []
+
+    def load_added_systems():
+        """Load added systems from added_systems.json file"""
+        try:
+            if os.path.exists(ADDED_SYSTEMS_FILE):
+                with open(ADDED_SYSTEMS_FILE, 'r') as f:
+                    return json.load(f)
+            else:
+                # Create empty file
+                save_added_systems([])
+                return []
+        except Exception as e:
+            log_error("Failed to load added systems", type(e).__name__, traceback.format_exc())
+            return []
+
+    def save_added_systems(added_systems_list):
+        """Save added systems to added_systems.json file"""
+        try:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(ADDED_SYSTEMS_FILE), exist_ok=True)
+            
+            with open(ADDED_SYSTEMS_FILE, 'w') as f:
+                json.dump(added_systems_list, f, indent=2)
+        except Exception as e:
+            log_error("Failed to save added systems", type(e).__name__, traceback.format_exc())
+
+    def add_system_to_added_systems(system_name, rom_folder, system_url):
+        """Add a new system to the added_systems.json file"""
+        try:
+            added_systems = load_added_systems()
+            
+            # Check if system already exists
+            for system in added_systems:
+                if system.get('name') == system_name:
+                    log_error(f"System {system_name} already exists in added systems")
+                    return False
+            
+            # Add new system
+            new_system = {
+                'name': system_name,
+                'roms_folder': rom_folder,
+                'url': system_url,
+                'file_format': ['.zip', '.7z', '.rar'],  # Default formats
+                'should_unzip': True,
+                'should_filter_usa': False
+            }
+            
+            added_systems.append(new_system)
+            save_added_systems(added_systems)
+            
+            # Reload the main data to include the new system
+            global data
+            data = load_main_systems_data()
+            
+            return True
+            
+        except Exception as e:
+            log_error(f"Failed to add system {system_name}", type(e).__name__, traceback.format_exc())
+            return False
+
+    def fix_added_systems_roms_folder():
+        """Fix the roms_folder in added_systems.json if it's incorrect"""
+        try:
+            added_systems = load_added_systems()
+            if not added_systems:
+                return
+            
+            fixed = False
+            for system in added_systems:
+                # If roms_folder is "psx", it means the user selected a folder inside psx
+                # We should use the system name as the folder instead
+                if system.get('roms_folder') == 'psx':
+                    system['roms_folder'] = system.get('name', 'unknown').lower().replace(' ', '_').replace('-', '_')
+                    fixed = True
+            
+            if fixed:
+                save_added_systems(added_systems)
+                print("Fixed roms_folder in added_systems.json")
+                
+        except Exception as e:
+            log_error("Failed to fix added systems roms_folder", type(e).__name__, traceback.format_exc())
+
+    def load_main_systems_data():
+        """Load main systems data including added systems"""
+        try:
+            # Load main systems
+            with open(JSON_FILE) as f:
+                main_data = json.load(f)
+            
+            # Load added systems
+            added_systems = load_added_systems()
+            
+            # Combine main data with added systems
+            combined_data = main_data + added_systems
+            
+            # Debug: Log the merging process
+            print(f"Loaded {len(main_data)} main systems")
+            print(f"Loaded {len(added_systems)} added systems")
+            print(f"Total systems: {len(combined_data)}")
+            
+            # Debug: Show system names
+            if added_systems:
+                print("Added systems:")
+                for system in added_systems:
+                    print(f"  - {system.get('name', 'Unknown')}")
+            
+            return combined_data
+        except Exception as e:
+            log_error("Failed to load main systems data", type(e).__name__, traceback.format_exc())
+            return []
 
     def find_next_letter_index(items, current_index, direction):
         """Find the next item that starts with a different letter"""
@@ -1425,6 +1716,15 @@ try:
     # Load settings after all functions are defined
     settings = load_settings()
 
+    # Update data to include added systems
+    try:
+        # Fix any issues with existing added systems
+        fix_added_systems_roms_folder()
+        data = load_main_systems_data()
+    except Exception as e:
+        log_error("Failed to load main systems data", type(e).__name__, traceback.format_exc())
+        # Keep original data if loading fails
+
     # Set up directories from settings
     WORK_DIR = settings["work_dir"]
     ROMS_DIR = settings["roms_dir"]
@@ -1456,7 +1756,7 @@ try:
             0: "A", 1: "B", 3: "Y", 6: "Start", 9: "LB", 10: "RB"
         },
         "playstation": {
-            0: "Cross", 1: "Circle", 3: "Triangle", 4: "L1", 5: "R1", 6: "Options"
+            0: "Cross", 1: "Circle", 3: "Triangle", 9: "L1", 10: "R1", 6: "Options"
         },
         "nintendo": {
             0: "B", 1: "A", 2: "Y", 4: "L", 5: "R", 9: "Plus"
@@ -1469,19 +1769,19 @@ try:
     # Controller-specific navigation mappings
     CONTROLLER_NAVIGATION = {
         "generic": {
-            "select": 4, "back": 3, "start": 10, "detail": 2, "left_shoulder": 6, "right_shoulder": 7
+            "select": 4, "back": 3, "start": 10, "detail": 2, "left_shoulder": 6, "right_shoulder": 7, "create_folder": 6
         },
         "xbox": {
-            "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 9, "right_shoulder": 10  # A, B, Start, Y, LB, RB
+            "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 9, "right_shoulder": 10, "create_folder": 9  # A, B, Start, Y, LB, RB, LB
         },
         "playstation": {
-            "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 4, "right_shoulder": 5  # Cross, Circle, Options, Triangle, L1, R1
+            "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 9, "right_shoulder": 10, "create_folder": 9  # Cross, Circle, Options, Triangle, L1, R1, L1
         },
         "nintendo": {
-            "select": 1, "back": 0, "start": 9, "detail": 2, "left_shoulder": 4, "right_shoulder": 5  # A, B, Plus, Y, L, R
+            "select": 1, "back": 0, "start": 9, "detail": 2, "left_shoulder": 4, "right_shoulder": 5, "create_folder": 4  # A, B, Plus, Y, L, R, L
         },
         "rg35xx": {
-            "select": 3, "back": 4, "start": 9, "detail": 6, "left_shoulder": 7, "right_shoulder": 8
+            "select": 3, "back": 4, "start": 9, "detail": 6, "left_shoulder": 7, "right_shoulder": 8, "create_folder": 7
         }
     }
     
@@ -1489,7 +1789,9 @@ try:
         """Get the button number for a specific action based on current controller type"""
         controller_type = settings.get("controller_type", "rg35xx")
         navigation_map = CONTROLLER_NAVIGATION.get(controller_type, CONTROLLER_NAVIGATION["rg35xx"])
-        return navigation_map.get(action)
+        button_number = navigation_map.get(action)
+        print(f"get_controller_button({action}) - controller_type: {controller_type}, button_number: {button_number}")
+        return button_number
     
     def get_button_name(action):
         """Get the display name for a button action based on current controller type"""
@@ -1511,12 +1813,165 @@ try:
     folder_browser_highlighted = 0
     folder_browser_scroll_offset = 0
     
+    # System name input modal state
+    show_system_input = False
+    system_input_text = ""
+    selected_system_to_add = None
+    
+    # Folder name input modal state
+    show_folder_name_input = False
+    folder_name_input_text = ""
+    folder_name_cursor_position = 0
+    folder_name_char_index = 0  # Current character being selected (0-35 for A-Z, 0-9)
+    
     # Main loop
     running = True
     button_delay = 0
     last_dpad_state = (0, 0)  # Track last D-pad state to detect actual changes
     last_dpad_time = 0  # Track when last D-pad navigation occurred
     DPAD_DEBOUNCE_MS = 100  # Minimum time between D-pad navigation actions
+
+    def draw_folder_name_input_modal():
+        """Draw the folder name input modal overlay"""
+        # Get actual screen dimensions
+        screen_width, screen_height = screen.get_size()
+        
+        # Semi-transparent background overlay
+        overlay = pygame.Surface((screen_width, screen_height))
+        overlay.set_alpha(128)
+        overlay.fill(BLACK)
+        screen.blit(overlay, (0, 0))
+        
+        # Modal sizing
+        modal_width = min(int(screen_width * 0.8), 500)
+        modal_height = min(int(screen_height * 0.6), 400)
+        modal_x = (screen_width - modal_width) // 2
+        modal_y = (screen_height - modal_height) // 2
+        
+        modal_rect = pygame.Rect(modal_x, modal_y, modal_width, modal_height)
+        pygame.draw.rect(screen, WHITE, modal_rect)
+        pygame.draw.rect(screen, BLACK, modal_rect, 3)
+        
+        # Title
+        title_surf = font.render("Enter Folder Name", True, BLACK)
+        title_x = modal_x + 20
+        title_y = modal_y + 20
+        screen.blit(title_surf, (title_x, title_y))
+        
+        # Current folder name display
+        name_y = title_y + 50
+        name_text = folder_name_input_text if folder_name_input_text else "Enter folder name..."
+        name_surf = font.render(name_text, True, BLACK)
+        screen.blit(name_surf, (title_x, name_y))
+        
+        # Character selection area
+        char_y = name_y + 60
+        char_title_surf = font.render("Select Character:", True, BLACK)
+        screen.blit(char_title_surf, (title_x, char_y))
+        
+        # Character grid (A-Z, 0-9)
+        chars = list("abcdefghijklmnopqrstuvwxyz0123456789")
+        chars_per_row = 13
+        char_size = 30
+        char_spacing = 5
+        
+        char_start_x = title_x
+        char_start_y = char_y + 40
+        
+        for i, char in enumerate(chars):
+            row = i // chars_per_row
+            col = i % chars_per_row
+            
+            char_x = char_start_x + col * (char_size + char_spacing)
+            char_y_pos = char_start_y + row * (char_size + char_spacing)
+            
+            # Highlight current character
+            if i == folder_name_char_index:
+                char_rect = pygame.Rect(char_x - 2, char_y_pos - 2, char_size + 4, char_size + 4)
+                pygame.draw.rect(screen, GREEN, char_rect)
+            
+            char_rect = pygame.Rect(char_x, char_y_pos, char_size, char_size)
+            pygame.draw.rect(screen, WHITE, char_rect)
+            pygame.draw.rect(screen, BLACK, char_rect, 1)
+            
+            char_surf = font.render(char, True, BLACK)
+            char_text_x = char_x + (char_size - char_surf.get_width()) // 2
+            char_text_y = char_y_pos + (char_size - char_surf.get_height()) // 2
+            screen.blit(char_surf, (char_text_x, char_text_y))
+        
+        # Instructions
+        instructions = [
+            "Use D-pad to select character",
+            "Press Select to add character",
+            "Press Back to delete character",
+            "Press Start to finish",
+            "Press any other button to finish"
+        ]
+        
+        inst_y = char_start_y + 120
+        for instruction in instructions:
+            inst_surf = font.render(instruction, True, GRAY)
+            screen.blit(inst_surf, (title_x, inst_y))
+            inst_y += 20
+
+    def create_folder_in_browser():
+        """Create a new folder in the current folder browser location"""
+        global show_folder_name_input, folder_name_input_text, folder_name_cursor_position, folder_name_char_index
+        
+        # Open the folder name input modal
+        show_folder_name_input = True
+        folder_name_input_text = ""
+        folder_name_cursor_position = 0
+        folder_name_char_index = 0
+
+    def restart_app():
+        """Restart the application"""
+        try:
+            print("Restarting application...")
+            pygame.quit()
+            # Use os.execv to restart the script
+            os.execv(sys.executable, ['python'] + sys.argv)
+        except Exception as e:
+            log_error("Failed to restart application", type(e).__name__, traceback.format_exc())
+            # Fallback: just exit and let user restart manually
+            sys.exit(0)
+
+    def create_folder_with_name():
+        """Create the folder with the custom name entered by user"""
+        global show_folder_name_input, folder_browser_highlighted
+        
+        try:
+            if not folder_name_input_text.strip():
+                # Use default name if no name entered
+                if selected_system_to_add is not None:
+                    default_name = selected_system_to_add['name'].lower().replace(" ", "_").replace("-", "_")
+                else:
+                    default_name = "new_folder"
+                folder_name = default_name
+            else:
+                folder_name = folder_name_input_text.strip()
+            
+            # Create the folder
+            new_folder_path = os.path.join(folder_browser_current_path, folder_name)
+            os.makedirs(new_folder_path, exist_ok=True)
+            
+            # Reload the folder contents to show the new folder
+            load_folder_contents(folder_browser_current_path)
+            
+            # Highlight the newly created folder
+            for i, item in enumerate(folder_browser_items):
+                if item["type"] == "folder" and item["name"] == folder_name:
+                    folder_browser_highlighted = i
+                    break
+            
+            print(f"Created folder: {new_folder_path}")
+            
+            # Close the input modal
+            show_folder_name_input = False
+            
+        except Exception as e:
+            log_error(f"Failed to create folder in {folder_browser_current_path}", type(e).__name__, traceback.format_exc())
+            show_folder_name_input = False
 
     while running:
         try:
@@ -1546,7 +2001,10 @@ try:
             
             # Draw modals if they should be shown
             modal_drawn = False
-            if show_game_details and current_game_detail is not None:
+            if show_folder_name_input:
+                draw_folder_name_input_modal()
+                modal_drawn = True
+            elif show_game_details and current_game_detail is not None:
                 draw_game_details_modal(current_game_detail)
                 modal_drawn = True
             elif show_folder_browser:
@@ -1554,7 +2012,7 @@ try:
                 modal_drawn = True
             
             # Flip display once at the end
-            if modal_drawn or not (show_game_details or show_folder_browser):
+            if modal_drawn or not (show_game_details or show_folder_browser or show_folder_name_input):
                 pygame.display.flip()
 
             for event in pygame.event.get():
@@ -1577,12 +2035,25 @@ try:
                             # Navigate into folder or go back
                             if folder_browser_items and folder_browser_highlighted < len(folder_browser_items):
                                 selected_item = folder_browser_items[folder_browser_highlighted]
-                                if selected_item["type"] in ["folder", "parent"]:
+                                print(f"Selected item: {selected_item['name']} (type: {selected_item['type']})")
+                                if selected_item["type"] == "create_folder":
+                                    # Create new folder
+                                    print("Creating new folder...")
+                                    create_folder_in_browser()
+                                elif selected_item["type"] in ["folder", "parent"]:
                                     folder_browser_current_path = selected_item["path"]
+                                    print(f"Navigating to folder: {folder_browser_current_path}")
                                     load_folder_contents(folder_browser_current_path)
                         elif mode == "systems":
-                            systems_count = len(data)
-                            if highlighted == systems_count:  # Settings option
+                            regular_systems = [d for d in data if not d.get('list_systems', False)]
+                            systems_count = len(regular_systems)
+                            if highlighted == systems_count:  # Add Systems option
+                                mode = "add_systems"
+                                highlighted = 0
+                                add_systems_highlighted = 0
+                                # Load available systems in background
+                                load_available_systems()
+                            elif highlighted == systems_count + 1:  # Settings option
                                 mode = "settings"
                                 highlighted = 0
                                 settings_scroll_offset = 0
@@ -1662,12 +2133,70 @@ try:
                                 else:
                                     folder_browser_current_path = current_roms
                                 load_folder_contents(folder_browser_current_path)
+                        elif mode == "add_systems":
+                            # Handle add systems selection
+                            if available_systems and add_systems_highlighted < len(available_systems):
+                                selected_system_to_add = available_systems[add_systems_highlighted]
+                                # Open folder browser to select ROM folder
+                                show_folder_browser = True
+                                # Start in ROMs directory
+                                folder_browser_current_path = settings.get("roms_dir", "/userdata/roms")
+                                load_folder_contents(folder_browser_current_path)
+                        elif mode == "games":
+                            if highlighted in selected_games:
+                                selected_games.remove(highlighted)
+                            else:
+                                selected_games.add(highlighted)
                     elif event.key == pygame.K_y:  # Y key = Detail view / Select folder
                         if show_folder_browser:
-                            # Select current folder path
-                            settings["roms_dir"] = folder_browser_current_path
-                            save_settings(settings)
-                            show_folder_browser = False
+                            if selected_system_to_add is not None:
+                                # Add system with selected folder
+                                system_name = selected_system_to_add['name']
+                                # Calculate relative path from ROMs directory
+                                roms_dir = settings.get("roms_dir", "/userdata/roms")
+                                
+                                # Debug: Print the paths
+                                print(f"Selected folder path: {folder_browser_current_path}")
+                                print(f"ROMs directory: {roms_dir}")
+                                
+                                if folder_browser_current_path.startswith(roms_dir):
+                                    rom_folder = os.path.relpath(folder_browser_current_path, roms_dir)
+                                    # If the selected path is the ROMs directory itself, use a default folder name
+                                    if rom_folder == ".":
+                                        rom_folder = system_name.lower().replace(" ", "_").replace("-", "_")
+                                else:
+                                    # If not starting with ROMs directory, use the basename of the selected path
+                                    rom_folder = os.path.basename(folder_browser_current_path)
+                                
+                                # Ensure we have a valid folder name
+                                if not rom_folder or rom_folder == ".":
+                                    rom_folder = system_name.lower().replace(" ", "_").replace("-", "_")
+                                
+                                print(f"Calculated roms_folder: {rom_folder}")
+                                
+                                system_url = selected_system_to_add['url']
+                                
+                                if add_system_to_added_systems(system_name, rom_folder, system_url):
+                                    draw_loading_message(f"System '{system_name}' added successfully!")
+                                    pygame.time.wait(2000)
+                                else:
+                                    draw_loading_message(f"Failed to add system '{system_name}'")
+                                    pygame.time.wait(2000)
+                                
+                                # Reset state
+                                selected_system_to_add = None
+                                show_folder_browser = False
+                                mode = "systems"
+                                highlighted = 0
+                            else:
+                                # Select current folder path for ROMs directory setting
+                                settings["roms_dir"] = folder_browser_current_path
+                                save_settings(settings)
+                                show_folder_browser = False
+                                # Restart app to apply ROMs directory change
+                                draw_loading_message("ROMs directory changed. Restarting...")
+                                pygame.time.wait(2000)
+                                restart_app()
                         elif mode == "games" and not show_game_details and game_list:
                             # Show details modal for current game
                             current_game_detail = game_list[highlighted]
@@ -1680,10 +2209,16 @@ try:
                             # Close details modal
                             show_game_details = False
                             current_game_detail = None
+                        elif show_folder_name_input:
+                            # Close folder name input modal
+                            show_folder_name_input = False
                         elif mode == "games":
                             mode = "systems"
                             highlighted = 0
                         elif mode == "settings":
+                            mode = "systems"
+                            highlighted = 0
+                        elif mode == "add_systems":
                             mode = "systems"
                             highlighted = 0
                     elif event.key == pygame.K_SPACE:  # Space = Start Download (Button 10)
@@ -1692,14 +2227,44 @@ try:
                             download_files(selected_system, selected_games)
                             mode = "systems"
                             highlighted = 0
+                        elif show_folder_name_input:
+                            # Finish folder name input
+                            create_folder_with_name()
+                    elif event.key == pygame.K_RETURN:  # Enter = Select
+                        if show_folder_name_input:
+                            # Add selected character to folder name
+                            chars = list("abcdefghijklmnopqrstuvwxyz0123456789")
+                            if folder_name_char_index < len(chars):
+                                selected_char = chars[folder_name_char_index]
+                                folder_name_input_text += selected_char
+                        elif show_folder_browser:
+                            # Navigate into folder or go back
+                            if folder_browser_items and folder_browser_highlighted < len(folder_browser_items):
+                                selected_item = folder_browser_items[folder_browser_highlighted]
+                                if selected_item["type"] == "create_folder":
+                                    # Create new folder
+                                    create_folder_in_browser()
+                                elif selected_item["type"] in ["folder", "parent"]:
+                                    folder_browser_current_path = selected_item["path"]
+                                    print(f"Navigating to folder: {folder_browser_current_path}")
+                                    load_folder_contents(folder_browser_current_path)
                     elif event.key == pygame.K_UP and not show_game_details:
                         # Skip keyboard navigation if joystick is connected (prevents double input)
                         if joystick is not None:
                             continue
-                        if show_folder_browser:
+                        if show_folder_name_input:
+                            # Navigate character selection up
+                            chars_per_row = 13
+                            if folder_name_char_index >= chars_per_row:
+                                folder_name_char_index -= chars_per_row
+                        elif show_folder_browser:
                             # Folder browser navigation
                             if folder_browser_items and folder_browser_highlighted > 0:
                                 folder_browser_highlighted -= 1
+                        elif mode == "add_systems":
+                            # Add systems navigation
+                            if available_systems and add_systems_highlighted > 0:
+                                add_systems_highlighted -= 1
                         elif mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move up
                             cols = 4
@@ -1711,19 +2276,35 @@ try:
                                 max_items = len(game_list)
                             elif mode == "settings":
                                 max_items = len(settings_list)
+                            elif mode == "add_systems":
+                                max_items = len(available_systems)
                             else:  # systems
-                                max_items = len(data) + 1  # +1 for Settings option
+                                regular_systems = [d for d in data if not d.get('list_systems', False)]
+                                max_items = len(regular_systems) + 2  # +2 for Add Systems and Settings options
                             
                             if max_items > 0:
-                                highlighted = (highlighted - 1) % max_items
+                                if mode == "add_systems":
+                                    add_systems_highlighted = (add_systems_highlighted - 1) % max_items
+                                else:
+                                    highlighted = (highlighted - 1) % max_items
                     elif event.key == pygame.K_DOWN and not show_game_details:
                         # Skip keyboard navigation if joystick is connected (prevents double input)
                         if joystick is not None:
                             continue
-                        if show_folder_browser:
+                        if show_folder_name_input:
+                            # Navigate character selection down
+                            chars_per_row = 13
+                            total_chars = 36  # A-Z + 0-9
+                            if folder_name_char_index + chars_per_row < total_chars:
+                                folder_name_char_index += chars_per_row
+                        elif show_folder_browser:
                             # Folder browser navigation
                             if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
                                 folder_browser_highlighted += 1
+                        elif mode == "add_systems":
+                            # Add systems navigation
+                            if available_systems and add_systems_highlighted < len(available_systems) - 1:
+                                add_systems_highlighted += 1
                         elif mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move down
                             cols = 4
@@ -1735,16 +2316,27 @@ try:
                                 max_items = len(game_list)
                             elif mode == "settings":
                                 max_items = len(settings_list)
+                            elif mode == "add_systems":
+                                max_items = len(available_systems)
                             else:  # systems
-                                max_items = len(data) + 1  # +1 for Settings option
+                                regular_systems = [d for d in data if not d.get('list_systems', False)]
+                                max_items = len(regular_systems) + 2  # +2 for Add Systems and Settings options
                             
                             if max_items > 0:
-                                highlighted = (highlighted + 1) % max_items
-                    elif event.key == pygame.K_LEFT and mode == "games" and not show_game_details:
+                                if mode == "add_systems":
+                                    add_systems_highlighted = (add_systems_highlighted + 1) % max_items
+                                else:
+                                    highlighted = (highlighted + 1) % max_items
+                    elif event.key == pygame.K_LEFT and not show_game_details:
                         # Skip keyboard navigation if joystick is connected (prevents double input)
                         if joystick is not None:
                             continue
-                        if game_list:
+                        if show_folder_name_input:
+                            # Navigate character selection left
+                            chars_per_row = 13
+                            if folder_name_char_index % chars_per_row > 0:
+                                folder_name_char_index -= 1
+                        elif mode == "games" and game_list:
                             if settings["view_type"] == "grid":
                                 # Grid navigation: move left
                                 cols = 4
@@ -1757,7 +2349,135 @@ try:
                         # Skip keyboard navigation if joystick is connected (prevents double input)
                         if joystick is not None:
                             continue
-                        if game_list:
+                        if show_folder_name_input:
+                            # Navigate character selection right
+                            chars_per_row = 13
+                            total_chars = 36  # A-Z + 0-9
+                            if folder_name_char_index % chars_per_row < chars_per_row - 1 and folder_name_char_index < total_chars - 1:
+                                folder_name_char_index += 1
+                        elif game_list:
+                            if settings["view_type"] == "grid":
+                                # Grid navigation: move right
+                                cols = 4
+                                if highlighted % cols < cols - 1 and highlighted < len(game_list) - 1:
+                                    highlighted += 1
+                            else:
+                                # List navigation: jump to different letter
+                                highlighted = find_next_letter_index(game_list, highlighted, 1)
+                    elif event.key == pygame.K_BACKSPACE:  # Backspace = Delete character
+                        if show_folder_name_input:
+                            if folder_name_input_text:
+                                folder_name_input_text = folder_name_input_text[:-1]
+                    elif event.key == pygame.K_UP and not show_game_details:
+                        # Skip keyboard navigation if joystick is connected (prevents double input)
+                        if joystick is not None:
+                            continue
+                        if show_folder_name_input:
+                            # Navigate character selection up
+                            chars_per_row = 13
+                            if folder_name_char_index >= chars_per_row:
+                                folder_name_char_index -= chars_per_row
+                        elif show_folder_browser:
+                            # Folder browser navigation
+                            if folder_browser_items and folder_browser_highlighted > 0:
+                                folder_browser_highlighted -= 1
+                        elif mode == "add_systems":
+                            # Add systems navigation
+                            if available_systems and add_systems_highlighted > 0:
+                                add_systems_highlighted -= 1
+                        elif mode == "games" and settings["view_type"] == "grid":
+                            # Grid navigation: move up
+                            cols = 4
+                            if highlighted >= cols:
+                                highlighted -= cols
+                        else:
+                            # Regular navigation for list view and other modes
+                            if mode == "games":
+                                max_items = len(game_list)
+                            elif mode == "settings":
+                                max_items = len(settings_list)
+                            elif mode == "add_systems":
+                                max_items = len(available_systems)
+                            else:  # systems
+                                regular_systems = [d for d in data if not d.get('list_systems', False)]
+                                max_items = len(regular_systems) + 2  # +2 for Add Systems and Settings options
+                            
+                            if max_items > 0:
+                                if mode == "add_systems":
+                                    add_systems_highlighted = (add_systems_highlighted - 1) % max_items
+                                else:
+                                    highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
+                                movement_occurred = True
+                    elif event.key == pygame.K_DOWN and not show_game_details:
+                        # Skip keyboard navigation if joystick is connected (prevents double input)
+                        if joystick is not None:
+                            continue
+                        if show_folder_name_input:
+                            # Navigate character selection down
+                            chars_per_row = 13
+                            total_chars = 36  # A-Z + 0-9
+                            if folder_name_char_index + chars_per_row < total_chars:
+                                folder_name_char_index += chars_per_row
+                        elif show_folder_browser:
+                            # Folder browser navigation
+                            if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
+                                folder_browser_highlighted += 1
+                        elif mode == "add_systems":
+                            # Add systems navigation
+                            if available_systems and add_systems_highlighted < len(available_systems) - 1:
+                                add_systems_highlighted += 1
+                        elif mode == "games" and settings["view_type"] == "grid":
+                            # Grid navigation: move down
+                            cols = 4
+                            if highlighted + cols < len(game_list):
+                                highlighted += cols
+                        else:
+                            # Regular navigation for list view and other modes
+                            if mode == "games":
+                                max_items = len(game_list)
+                            elif mode == "settings":
+                                max_items = len(settings_list)
+                            elif mode == "add_systems":
+                                max_items = len(available_systems)
+                            else:  # systems
+                                regular_systems = [d for d in data if not d.get('list_systems', False)]
+                                max_items = len(regular_systems) + 2  # +2 for Add Systems and Settings options
+                            
+                            if max_items > 0:
+                                if mode == "add_systems":
+                                    add_systems_highlighted = (add_systems_highlighted + 1) % max_items
+                                else:
+                                    highlighted = (highlighted + 1) % max_items
+                                movement_occurred = True
+                    elif event.key == pygame.K_LEFT and mode == "games" and not show_game_details:
+                        # Skip keyboard navigation if joystick is connected (prevents double input)
+                        if joystick is not None:
+                            continue
+                        if show_folder_name_input:
+                            # Navigate character selection left
+                            chars_per_row = 13
+                            if folder_name_char_index % chars_per_row > 0:
+                                folder_name_char_index -= 1
+                        elif game_list:
+                            if settings["view_type"] == "grid":
+                                # Grid navigation: move left
+                                cols = 4
+                                if highlighted % cols > 0:
+                                    highlighted -= 1
+                            else:
+                                # List navigation: jump to different letter
+                                highlighted = find_next_letter_index(game_list, highlighted, -1)
+                    elif event.key == pygame.K_RIGHT and mode == "games" and not show_game_details:
+                        # Skip keyboard navigation if joystick is connected (prevents double input)
+                        if joystick is not None:
+                            continue
+                        if show_folder_name_input:
+                            # Navigate character selection right
+                            chars_per_row = 13
+                            total_chars = 36  # A-Z + 0-9
+                            if folder_name_char_index % chars_per_row < chars_per_row - 1 and folder_name_char_index < total_chars - 1:
+                                folder_name_char_index += 1
+                        elif game_list:
                             if settings["view_type"] == "grid":
                                 # Grid navigation: move right
                                 cols = 4
@@ -1775,6 +2495,9 @@ try:
                         current_pressed_button = f"{controller_type.upper()}: {button_name}"
                         last_button_time = pygame.time.get_ticks()
                     
+                    # Debug: Show all button presses
+                    print(f"Joystick button pressed: {event.button}")
+                    
                     # Controller-aware button mapping
                     select_button = get_controller_button("select")
                     back_button = get_controller_button("back")
@@ -1784,16 +2507,33 @@ try:
                     right_shoulder_button = get_controller_button("right_shoulder")
                     
                     if event.button == select_button:  # Select
-                        if show_folder_browser:
+                        if show_folder_name_input:
+                            # Add selected character to folder name
+                            chars = list("abcdefghijklmnopqrstuvwxyz0123456789")
+                            if folder_name_char_index < len(chars):
+                                selected_char = chars[folder_name_char_index]
+                                folder_name_input_text += selected_char
+                        elif show_folder_browser:
                             # Navigate into folder or go back
                             if folder_browser_items and folder_browser_highlighted < len(folder_browser_items):
                                 selected_item = folder_browser_items[folder_browser_highlighted]
-                                if selected_item["type"] in ["folder", "parent"]:
+                                if selected_item["type"] == "create_folder":
+                                    # Create new folder
+                                    create_folder_in_browser()
+                                elif selected_item["type"] in ["folder", "parent"]:
                                     folder_browser_current_path = selected_item["path"]
+                                    print(f"Navigating to folder: {folder_browser_current_path}")
                                     load_folder_contents(folder_browser_current_path)
                         elif mode == "systems":
-                            systems_count = len(data)
-                            if highlighted == systems_count:  # Settings option
+                            regular_systems = [d for d in data if not d.get('list_systems', False)]
+                            systems_count = len(regular_systems)
+                            if highlighted == systems_count:  # Add Systems option
+                                mode = "add_systems"
+                                highlighted = 0
+                                add_systems_highlighted = 0
+                                # Load available systems in background
+                                load_available_systems()
+                            elif highlighted == systems_count + 1:  # Settings option
                                 mode = "settings"
                                 highlighted = 0
                                 settings_scroll_offset = 0
@@ -1873,12 +2613,71 @@ try:
                                 else:
                                     folder_browser_current_path = current_roms
                                 load_folder_contents(folder_browser_current_path)
+                        elif mode == "add_systems":
+                            # Handle add systems selection
+                            if available_systems and add_systems_highlighted < len(available_systems):
+                                selected_system_to_add = available_systems[add_systems_highlighted]
+                                # Open folder browser to select ROM folder
+                                show_folder_browser = True
+                                # Start in ROMs directory
+                                folder_browser_current_path = settings.get("roms_dir", "/userdata/roms")
+                                load_folder_contents(folder_browser_current_path)
+                        elif mode == "games":
+                            if highlighted in selected_games:
+                                selected_games.remove(highlighted)
+                            else:
+                                selected_games.add(highlighted)
                     elif event.button == detail_button:  # Detail view / Select folder
                         if show_folder_browser:
-                            # Select current folder path
-                            settings["roms_dir"] = folder_browser_current_path
-                            save_settings(settings)
-                            show_folder_browser = False
+                            print(f"Detail button pressed - Current folder: {folder_browser_current_path}")
+                            if selected_system_to_add is not None:
+                                # Add system with selected folder
+                                system_name = selected_system_to_add['name']
+                                # Calculate relative path from ROMs directory
+                                roms_dir = settings.get("roms_dir", "/userdata/roms")
+                                
+                                # Debug: Print the paths
+                                print(f"Selected folder path: {folder_browser_current_path}")
+                                print(f"ROMs directory: {roms_dir}")
+                                
+                                if folder_browser_current_path.startswith(roms_dir):
+                                    rom_folder = os.path.relpath(folder_browser_current_path, roms_dir)
+                                    # If the selected path is the ROMs directory itself, use a default folder name
+                                    if rom_folder == ".":
+                                        rom_folder = system_name.lower().replace(" ", "_").replace("-", "_")
+                                else:
+                                    # If not starting with ROMs directory, use the basename of the selected path
+                                    rom_folder = os.path.basename(folder_browser_current_path)
+                                
+                                # Ensure we have a valid folder name
+                                if not rom_folder or rom_folder == ".":
+                                    rom_folder = system_name.lower().replace(" ", "_").replace("-", "_")
+                                
+                                print(f"Calculated roms_folder: {rom_folder}")
+                                
+                                system_url = selected_system_to_add['url']
+                                
+                                if add_system_to_added_systems(system_name, rom_folder, system_url):
+                                    draw_loading_message(f"System '{system_name}' added successfully!")
+                                    pygame.time.wait(2000)
+                                else:
+                                    draw_loading_message(f"Failed to add system '{system_name}'")
+                                    pygame.time.wait(2000)
+                                
+                                # Reset state
+                                selected_system_to_add = None
+                                show_folder_browser = False
+                                mode = "systems"
+                                highlighted = 0
+                            else:
+                                # Select current folder path for ROMs directory setting
+                                settings["roms_dir"] = folder_browser_current_path
+                                save_settings(settings)
+                                show_folder_browser = False
+                                # Restart app to apply ROMs directory change
+                                draw_loading_message("ROMs directory changed. Restarting...")
+                                pygame.time.wait(2000)
+                                restart_app()
                         elif mode == "games" and not show_game_details and game_list:
                             # Show details modal for current game
                             current_game_detail = game_list[highlighted]
@@ -1891,10 +2690,16 @@ try:
                             # Close details modal
                             show_game_details = False
                             current_game_detail = None
+                        elif show_folder_name_input:
+                            # Close folder name input modal
+                            show_folder_name_input = False
                         elif mode == "games":
                             mode = "systems"
                             highlighted = 0
                         elif mode == "settings":
+                            mode = "systems"
+                            highlighted = 0
+                        elif mode == "add_systems":
                             mode = "systems"
                             highlighted = 0
                     elif event.button == left_shoulder_button:  # Left shoulder - Previous page
@@ -1920,6 +2725,9 @@ try:
                             download_files(selected_system, selected_games)
                             mode = "systems"
                             highlighted = 0
+                        elif show_folder_name_input:
+                            # Finish folder name input
+                            create_folder_with_name()
                 elif event.type == pygame.JOYHATMOTION:
                     hat = joystick.get_hat(0)
                     
@@ -1950,7 +2758,19 @@ try:
                     movement_occurred = False
                     
                     if hat[1] != 0 and not show_game_details:  # Up or Down
-                        if show_folder_browser:
+                        if show_folder_name_input:
+                            # Navigate character selection up/down
+                            chars_per_row = 13
+                            total_chars = 36  # A-Z + 0-9
+                            if hat[1] == 1:  # Up
+                                if folder_name_char_index >= chars_per_row:
+                                    folder_name_char_index -= chars_per_row
+                                    movement_occurred = True
+                            else:  # Down
+                                if folder_name_char_index + chars_per_row < total_chars:
+                                    folder_name_char_index += chars_per_row
+                                    movement_occurred = True
+                        elif show_folder_browser:
                             # Folder browser navigation
                             if hat[1] == 1:  # Up
                                 if folder_browser_items and folder_browser_highlighted > 0:
@@ -1959,6 +2779,16 @@ try:
                             else:  # Down
                                 if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
                                     folder_browser_highlighted += 1
+                                    movement_occurred = True
+                        elif mode == "add_systems":
+                            # Add systems navigation
+                            if hat[1] == 1:  # Up
+                                if available_systems and add_systems_highlighted > 0:
+                                    add_systems_highlighted -= 1
+                                    movement_occurred = True
+                            else:  # Down
+                                if available_systems and add_systems_highlighted < len(available_systems) - 1:
+                                    add_systems_highlighted += 1
                                     movement_occurred = True
                         elif mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move up/down
@@ -1977,14 +2807,32 @@ try:
                                 max_items = len(game_list)
                             elif mode == "settings":
                                 max_items = len(settings_list)
+                            elif mode == "add_systems":
+                                max_items = len(available_systems)
                             else:  # systems
-                                max_items = len(data) + 1  # +1 for Settings option
+                                regular_systems = [d for d in data if not d.get('list_systems', False)]
+                                max_items = len(regular_systems) + 2  # +2 for Add Systems and Settings options
                             
                             if max_items > 0:
-                                highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
+                                if mode == "add_systems":
+                                    add_systems_highlighted = (add_systems_highlighted - 1) % max_items
+                                else:
+                                    highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
                                 movement_occurred = True
-                    elif hat[0] != 0 and mode == "games" and not show_game_details:  # Left or Right (only in games mode)
-                        if settings["view_type"] == "grid":
+                    elif hat[0] != 0 and not show_game_details:  # Left or Right
+                        if show_folder_name_input:
+                            # Navigate character selection left/right
+                            chars_per_row = 13
+                            total_chars = 36  # A-Z + 0-9
+                            if hat[0] < 0:  # Left
+                                if folder_name_char_index % chars_per_row > 0:
+                                    folder_name_char_index -= 1
+                                    movement_occurred = True
+                            else:  # Right
+                                if folder_name_char_index % chars_per_row < chars_per_row - 1 and folder_name_char_index < total_chars - 1:
+                                    folder_name_char_index += 1
+                                    movement_occurred = True
+                        elif mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move left/right
                             cols = 4
                             if hat[0] < 0:  # Left
