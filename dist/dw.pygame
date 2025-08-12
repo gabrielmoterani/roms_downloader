@@ -12,14 +12,22 @@ from urllib.parse import urljoin, unquote, quote
 from threading import Thread
 from queue import Queue
 
+# Check for development mode
+DEV_MODE = os.getenv('DEV_MODE', 'false').lower() == 'true'
+
 # Auto-detect environment and set paths
 # Get the directory where the script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Set static paths (WORK_DIR and ROMS_DIR will be loaded from settings later)
-JSON_FILE = os.path.join(SCRIPT_DIR, "download.json")
-LOG_FILE = os.path.join(SCRIPT_DIR, "error.log")
-CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
+if DEV_MODE:
+    JSON_FILE = os.path.join(SCRIPT_DIR, "..", "assets", "config", "download.json")
+    LOG_FILE = os.path.join(SCRIPT_DIR, "..", "error.log")
+    CONFIG_FILE = os.path.join(SCRIPT_DIR, "..", "config.json")
+else:
+    JSON_FILE = os.path.join(SCRIPT_DIR, "download.json")
+    LOG_FILE = os.path.join(SCRIPT_DIR, "error.log")
+    CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 FPS = 30
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 FONT_SIZE = 28
@@ -114,10 +122,16 @@ try:
     def load_settings():
         """Load settings from config file"""
         # Default paths based on environment
-        if os.path.exists("/userdata/roms"):
+        if DEV_MODE:
+            # Development mode - use local directories
+            default_work_dir = os.path.join(SCRIPT_DIR, "..", "py_downloads")
+            default_roms_dir = os.path.join(SCRIPT_DIR, "..", "roms")
+        elif os.path.exists("/userdata/roms"):
+            # Console environment detected
             default_work_dir = "/userdata/py_downloads"
             default_roms_dir = "/userdata/roms"
         else:
+            # Production fallback - use script directory
             default_work_dir = os.path.join(SCRIPT_DIR, "py_downloads")
             default_roms_dir = os.path.join(SCRIPT_DIR, "roms")
         
@@ -278,10 +292,10 @@ try:
         try:
             draw_loading_message("Checking for updates...")
             
-            # GitHub raw URLs for the files
+            # GitHub raw URLs for the files from dist folder
             files_to_update = {
-                "download.json": "https://raw.githubusercontent.com/gabrielmoterani/roms_downloader/main/download.json",
-                "dw.pygame": "https://raw.githubusercontent.com/gabrielmoterani/roms_downloader/main/dw.pygame"
+                "download.json": "https://raw.githubusercontent.com/hiitsgabe/roms_downloader/main/dist/download.json",
+                "dw.pygame": "https://raw.githubusercontent.com/hiitsgabe/roms_downloader/main/dist/dw.pygame"
             }
             
             total_files = len(files_to_update)
@@ -337,8 +351,10 @@ try:
                 draw_loading_message("Update completed successfully!")
                 if "dw.pygame" in updated_files:
                     pygame.time.wait(2000)
-                    draw_loading_message("Please restart the application to use the updated version.")
-                    pygame.time.wait(3000)
+                    draw_loading_message("Application will exit now. Please restart to use the updated version.")
+                    pygame.time.wait(2000)
+                    pygame.quit()
+                    sys.exit(0)
             elif updated_files and failed_files:
                 draw_loading_message(f"Partial update: {len(updated_files)} updated, {len(failed_files)} failed")
                 pygame.time.wait(3000)

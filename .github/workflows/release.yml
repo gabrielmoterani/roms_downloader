@@ -18,7 +18,7 @@ jobs:
     
     - name: Create downloads.zip
       run: |
-        zip -j downloader.zip download.json dw.pygame
+      mv dw.py dw.pygame && zip -j downloader.zip download.json dw.pygame
     
     - name: Create Release
       uses: softprops/action-gh-release@v2
