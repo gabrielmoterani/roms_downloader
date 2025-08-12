@@ -258,5 +258,11 @@
     "should_unzip": true,
     "use_api": true,
     "supports_pagination": true
+  },
+  {
+    "name": "Other Systems",
+    "list_systems": true,
+    "url": "https://myrient.erista.me/files/No-Intro/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>"
   }
 ]

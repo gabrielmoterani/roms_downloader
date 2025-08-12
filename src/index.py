@@ -126,15 +126,15 @@ try:
         """Load settings from config file"""
         # Default paths based on environment
         if DEV_MODE:
-            # Development mode - use local directories
+            # Development mode - use local directories since /userdata might not exist
             default_work_dir = os.path.join(SCRIPT_DIR, "..", "py_downloads")
             default_roms_dir = os.path.join(SCRIPT_DIR, "..", "roms")
-        elif os.path.exists("/userdata/roms"):
-            # Console environment detected
+        elif os.path.exists("/userdata") and os.access("/userdata", os.W_OK):
+            # Console environment with writable /userdata
             default_work_dir = "/userdata/py_downloads"
             default_roms_dir = "/userdata/roms"
         else:
-            # Production fallback - use script directory
+            # Fallback - use script directory
             default_work_dir = os.path.join(SCRIPT_DIR, "py_downloads")
             default_roms_dir = os.path.join(SCRIPT_DIR, "roms")
         
@@ -503,6 +503,7 @@ try:
         pygame.display.flip()
 
     def draw_settings_menu():
+        global settings_scroll_offset
         screen.fill(WHITE)
         y = 10
         
@@ -526,54 +527,73 @@ try:
             y += FONT_SIZE + 5
         
         y += 20
+        start_y = y
+        
+        # Calculate visible items based on screen height
+        screen_width, screen_height = screen.get_size()
+        row_height = FONT_SIZE + 10
+        cache_info_height = FONT_SIZE + 25  # Space for cache info at bottom
+        available_height = screen_height - start_y - cache_info_height - 50  # Leave space for debug controller
+        items_per_screen = max(1, available_height // row_height)
+        
+        # Calculate scroll boundaries
+        total_items = len(settings_list)
+        max_scroll = max(0, total_items - items_per_screen)
+        
+        # Adjust scroll offset to keep highlighted item visible
+        if highlighted < settings_scroll_offset:
+            settings_scroll_offset = highlighted
+        elif highlighted >= settings_scroll_offset + items_per_screen:
+            settings_scroll_offset = highlighted - items_per_screen + 1
+        
+        # Clamp scroll offset
+        settings_scroll_offset = max(0, min(settings_scroll_offset, max_scroll))
+        
+        # Calculate visible items
+        start_idx = settings_scroll_offset
+        end_idx = min(start_idx + items_per_screen, total_items)
+        visible_settings = settings_list[start_idx:end_idx]
         
         # Draw settings items
-        for i, setting_name in enumerate(settings_list):
-            color = GREEN if i == highlighted else BLACK
+        for i, setting_name in enumerate(visible_settings):
+            actual_idx = start_idx + i
+            color = GREEN if actual_idx == highlighted else BLACK
             
             # Get current setting value
             setting_value = ""
-            if i == 0:  # Enable Box-art Display
+            if actual_idx == 0:  # Enable Box-art Display
                 setting_value = "ON" if settings["enable_boxart"] else "OFF"
-            elif i == 1:  # Enable Image Cache
+            elif actual_idx == 1:  # Enable Image Cache
                 setting_value = "ON" if settings["cache_enabled"] else "OFF"
-            elif i == 2:  # Reset Image Cache
+            elif actual_idx == 2:  # Reset Image Cache
                 select_button_name = get_button_name("select")
                 setting_value = f"Press {select_button_name} to reset"
-            elif i == 3:  # Update from GitHub
+            elif actual_idx == 3:  # Update from GitHub
                 select_button_name = get_button_name("select")
                 setting_value = f"Press {select_button_name} to update"
-            elif i == 4:  # View Type
+            elif actual_idx == 4:  # View Type
                 setting_value = settings["view_type"].upper()
-            elif i == 5:  # USA Games Only
+            elif actual_idx == 5:  # USA Games Only
                 setting_value = "ON" if settings["usa_only"] else "OFF"
-            elif i == 6:  # Debug Controller
+            elif actual_idx == 6:  # Debug Controller
                 setting_value = "ON" if settings["debug_controller"] else "OFF"
-            elif i == 7:  # Controller Type
+            elif actual_idx == 7:  # Controller Type
                 setting_value = settings["controller_type"].upper()
-            elif i == 8:  # Work Directory
+            elif actual_idx == 8:  # Work Directory
                 work_dir = settings.get("work_dir", "")
                 setting_value = work_dir[-30:] + "..." if len(work_dir) > 30 else work_dir
-            elif i == 9:  # ROMs Directory
+            elif actual_idx == 9:  # ROMs Directory
                 roms_dir = settings.get("roms_dir", "")
                 setting_value = roms_dir[-30:] + "..." if len(roms_dir) > 30 else roms_dir
             
             setting_text = f"{setting_name}: {setting_value}"
             setting_surf = font.render(setting_text, True, color)
             screen.blit(setting_surf, (20, y))
-            y += FONT_SIZE + 10
+            y += row_height
         
-        # Show cache info
-        y += 20
-        cache_info = f"Cached images: {len([k for k, v in image_cache.items() if v != 'loading' and v is not None])}"
-        info_surf = font.render(cache_info, True, GRAY)
-        screen.blit(info_surf, (20, y))
         
         # Draw debug controller info
         draw_debug_controller()
-        
-        if not show_game_details:
-            pygame.display.flip()
 
     def draw_grid_view(title, items, selected_indices):
         screen.fill(WHITE)
@@ -939,6 +959,120 @@ try:
             
         screen.blit(instruction_surf, (instruction_x, instruction_y))
 
+    def draw_folder_browser_modal():
+        """Draw the folder browser modal overlay"""
+        global folder_browser_scroll_offset
+        
+        # Get actual screen dimensions
+        screen_width, screen_height = screen.get_size()
+        
+        # Semi-transparent background overlay
+        overlay = pygame.Surface((screen_width, screen_height))
+        overlay.set_alpha(128)
+        overlay.fill(BLACK)
+        screen.blit(overlay, (0, 0))
+        
+        # Modal sizing
+        modal_width = min(int(screen_width * 0.9), 600)
+        modal_height = min(int(screen_height * 0.8), 500)
+        modal_x = (screen_width - modal_width) // 2
+        modal_y = (screen_height - modal_height) // 2
+        
+        modal_rect = pygame.Rect(modal_x, modal_y, modal_width, modal_height)
+        pygame.draw.rect(screen, WHITE, modal_rect)
+        pygame.draw.rect(screen, BLACK, modal_rect, 3)
+        
+        # Title
+        title_surf = font.render("Select Folder", True, BLACK)
+        title_x = modal_x + 20
+        title_y = modal_y + 20
+        screen.blit(title_surf, (title_x, title_y))
+        
+        # Current path
+        current_path_display = folder_browser_current_path
+        if len(current_path_display) > 50:
+            current_path_display = "..." + current_path_display[-47:]
+        
+        path_surf = font.render(f"Path: {current_path_display}", True, GRAY)
+        path_y = title_y + 35
+        screen.blit(path_surf, (title_x, path_y))
+        
+        # Instructions
+        select_button_name = get_button_name("select")
+        back_button_name = get_button_name("back")
+        detail_button_name = get_button_name("detail")
+        
+        instructions = [
+            f"Use D-pad to navigate",
+            f"Press {select_button_name} to enter folder",
+            f"Press {detail_button_name} to select current folder",
+            f"Press {back_button_name} to cancel"
+        ]
+        
+        inst_y = path_y + 35
+        for instruction in instructions:
+            inst_surf = font.render(instruction, True, GRAY)
+            screen.blit(inst_surf, (title_x, inst_y))
+            inst_y += 20
+        
+        # Calculate list area
+        list_y = inst_y + 20
+        list_height = modal_height - (list_y - modal_y) - 20
+        row_height = FONT_SIZE + 5
+        items_per_screen = max(1, list_height // row_height)
+        
+        # Calculate scroll
+        total_items = len(folder_browser_items)
+        max_scroll = max(0, total_items - items_per_screen)
+        
+        # Auto-scroll to keep highlighted item visible
+        if folder_browser_highlighted < folder_browser_scroll_offset:
+            folder_browser_scroll_offset = folder_browser_highlighted
+        elif folder_browser_highlighted >= folder_browser_scroll_offset + items_per_screen:
+            folder_browser_scroll_offset = folder_browser_highlighted - items_per_screen + 1
+        
+        folder_browser_scroll_offset = max(0, min(folder_browser_scroll_offset, max_scroll))
+        
+        # Draw folder items
+        start_idx = folder_browser_scroll_offset
+        end_idx = min(start_idx + items_per_screen, total_items)
+        visible_items = folder_browser_items[start_idx:end_idx]
+        
+        for i, item in enumerate(visible_items):
+            actual_idx = start_idx + i
+            is_highlighted = actual_idx == folder_browser_highlighted
+            
+            item_y = list_y + i * row_height
+            color = GREEN if is_highlighted else BLACK
+            
+            # Prefix based on type
+            if item["type"] == "parent":
+                display_name = f"[DIR] {item['name']} (Go back)"
+            elif item["type"] == "folder":
+                display_name = f"[DIR] {item['name']}"
+            elif item["type"] == "error":
+                display_name = f"[ERR] {item['name']}"
+                color = GRAY
+            else:
+                display_name = item['name']
+            
+            # Truncate if too long
+            max_width = modal_width - 60
+            test_surf = font.render(display_name, True, color)
+            if test_surf.get_width() > max_width:
+                while len(display_name) > 5 and test_surf.get_width() > max_width:
+                    display_name = display_name[:-4] + "..."
+                    test_surf = font.render(display_name, True, color)
+            
+            # Highlight background
+            if is_highlighted:
+                highlight_rect = pygame.Rect(modal_x + 10, item_y - 2, modal_width - 20, row_height)
+                pygame.draw.rect(screen, (240, 240, 240), highlight_rect)
+            
+            # Draw item
+            item_surf = font.render(display_name, True, color)
+            screen.blit(item_surf, (title_x, item_y))
+
     def draw_debug_controller():
         """Draw the current pressed button at the bottom of the screen if debug mode is enabled"""
         if not settings.get("debug_controller", False):
@@ -1214,6 +1348,46 @@ try:
             log_error(f"Failed to fetch list for system {system}", type(e).__name__, traceback.format_exc())
             return []
 
+    def load_folder_contents(path):
+        """Load folder contents for browser"""
+        global folder_browser_items, folder_browser_highlighted, folder_browser_scroll_offset
+        
+        try:
+            # Normalize path
+            path = os.path.abspath(path)
+            items = []
+            
+            # Add parent directory option unless we're at root
+            if path != "/" and path != os.path.dirname(path):
+                items.append({"name": "..", "type": "parent", "path": os.path.dirname(path)})
+            
+            # Get directory contents
+            if os.path.exists(path) and os.path.isdir(path):
+                try:
+                    entries = os.listdir(path)
+                    entries.sort()
+                    
+                    # Add directories first
+                    for entry in entries:
+                        entry_path = os.path.join(path, entry)
+                        if os.path.isdir(entry_path) and not entry.startswith('.'):
+                            items.append({"name": entry, "type": "folder", "path": entry_path})
+                    
+                except PermissionError:
+                    items.append({"name": "Permission denied", "type": "error", "path": path})
+            else:
+                items.append({"name": "Path not found", "type": "error", "path": path})
+            
+            folder_browser_items = items
+            folder_browser_highlighted = 0
+            folder_browser_scroll_offset = 0
+            
+        except Exception as e:
+            log_error(f"Failed to load folder contents for {path}", type(e).__name__, traceback.format_exc())
+            folder_browser_items = [{"name": "Error loading folder", "type": "error", "path": path}]
+            folder_browser_highlighted = 0
+            folder_browser_scroll_offset = 0
+
     def find_next_letter_index(items, current_index, direction):
         """Find the next item that starts with a different letter"""
         if not items:
@@ -1251,40 +1425,40 @@ try:
     WORK_DIR = settings["work_dir"]
     ROMS_DIR = settings["roms_dir"]
     
-    # Create directories
-    os.makedirs(WORK_DIR, exist_ok=True)
-    os.makedirs(ROMS_DIR, exist_ok=True)
+    # Create directories with error handling
+    try:
+        os.makedirs(WORK_DIR, exist_ok=True)
+    except (OSError, PermissionError) as e:
+        log_error(f"Could not create work directory {WORK_DIR}", type(e).__name__, traceback.format_exc())
+        print(f"Warning: Could not create work directory {WORK_DIR}. Downloads may fail.")
+    
+    try:
+        os.makedirs(ROMS_DIR, exist_ok=True)
+    except (OSError, PermissionError) as e:
+        log_error(f"Could not create ROMs directory {ROMS_DIR}", type(e).__name__, traceback.format_exc())
+        print(f"Warning: Could not create ROMs directory {ROMS_DIR}. You may need to create it manually or select a different directory in settings.")
 
     # Debug controller variables
     current_pressed_button = ""
     last_button_time = 0
     BUTTON_DISPLAY_TIME = 1000  # milliseconds
     
-    # Controller-specific button mappings
+    # Controller-specific button mappings (only used buttons)
     CONTROLLER_MAPPINGS = {
         "generic": {
-            0: "Button 0", 1: "Button 1", 2: "Button 2", 3: "Button 3", 4: "Button 4",
-            5: "Button 5", 6: "Button 6", 7: "Button 7", 8: "Button 8", 9: "Button 9",
-            10: "Button 10", 11: "Button 11", 12: "Button 12"
+            2: "Button 2", 3: "Button 3", 4: "Button 4", 6: "Button 6", 7: "Button 7", 10: "Button 10"
         },
         "xbox": {
-            0: "A", 1: "B", 2: "X", 3: "Y", 4: "Back", 5: "Guide", 6: "Start",
-            7: "L-Stick", 8: "R-Stick", 9: "LB", 10: "RB", 11: "D-Up", 12: "D-Down",
-            13: "D-Left", 14: "D-Right"
+            0: "A", 1: "B", 3: "Y", 6: "Start", 9: "LB", 10: "RB"
         },
         "playstation": {
-            0: "Cross", 1: "Circle", 2: "Square", 3: "Triangle", 4: "L1", 5: "R1",
-            6: "L2", 7: "R2", 8: "Share", 9: "Options", 10: "L3", 11: "R3",
-            12: "PS", 13: "Touchpad"
+            0: "Cross", 1: "Circle", 3: "Triangle", 4: "L1", 5: "R1", 6: "Options"
         },
         "nintendo": {
-            0: "B", 1: "A", 2: "Y", 3: "X", 4: "L", 5: "R", 6: "ZL", 7: "ZR",
-            8: "Minus", 9: "Plus", 10: "L-Stick", 11: "R-Stick", 12: "Home", 13: "Capture"
+            0: "B", 1: "A", 2: "Y", 4: "L", 5: "R", 9: "Plus"
         },
         "rg35xx": {
-            0: "Button 0", 1: "Button 1", 2: "Button B", 3: "Button A", 4: "Button B",
-            5: "Button 5", 6: "Button X", 7: "Button L", 8: "Button R", 9: "SELECT",
-            10: "Button 10", 11: "Button 11", 12: "Button 12"
+            3: "Button A", 4: "Button B", 6: "Button X", 7: "Button L", 8: "Button R", 9: "SELECT"
         },
     }
     
@@ -1297,7 +1471,7 @@ try:
             "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 9, "right_shoulder": 10  # A, B, Start, Y, LB, RB
         },
         "playstation": {
-            "select": 0, "back": 1, "start": 9, "detail": 3, "left_shoulder": 4, "right_shoulder": 5  # Cross, Circle, Options, Triangle, L1, R1
+            "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 4, "right_shoulder": 5  # Cross, Circle, Options, Triangle, L1, R1
         },
         "nintendo": {
             "select": 1, "back": 0, "start": 9, "detail": 2, "left_shoulder": 4, "right_shoulder": 5  # A, B, Plus, Y, L, R
@@ -1325,6 +1499,13 @@ try:
     # Game details modal state
     show_game_details = False
     current_game_detail = None
+    
+    # Folder browser modal state
+    show_folder_browser = False
+    folder_browser_current_path = "/"
+    folder_browser_items = []
+    folder_browser_highlighted = 0
+    folder_browser_scroll_offset = 0
     
     # Main loop
     running = True
@@ -1356,9 +1537,17 @@ try:
             elif mode == "settings":
                 draw_settings_menu()
             
-            # Draw game details modal if it should be shown
+            # Draw modals if they should be shown
+            modal_drawn = False
             if show_game_details and current_game_detail is not None:
                 draw_game_details_modal(current_game_detail)
+                modal_drawn = True
+            elif show_folder_browser:
+                draw_folder_browser_modal()
+                modal_drawn = True
+            
+            # Flip display once at the end
+            if modal_drawn or not (show_game_details or show_folder_browser):
                 pygame.display.flip()
 
             for event in pygame.event.get():
@@ -1377,11 +1566,19 @@ try:
                     
                     # Keyboard controls (same logic as joystick)
                     if event.key == pygame.K_RETURN:  # Enter = Select (Button 4)
-                        if mode == "systems":
+                        if show_folder_browser:
+                            # Navigate into folder or go back
+                            if folder_browser_items and folder_browser_highlighted < len(folder_browser_items):
+                                selected_item = folder_browser_items[folder_browser_highlighted]
+                                if selected_item["type"] in ["folder", "parent"]:
+                                    folder_browser_current_path = selected_item["path"]
+                                    load_folder_contents(folder_browser_current_path)
+                        elif mode == "systems":
                             systems_count = len(data)
                             if highlighted == systems_count:  # Settings option
                                 mode = "settings"
                                 highlighted = 0
+                                settings_scroll_offset = 0
                             else:
                                 selected_system = highlighted
                                 current_page = 0
@@ -1445,33 +1642,34 @@ try:
                                     settings["work_dir"] = work_options[0]
                                 save_settings(settings)
                             elif highlighted == 9:  # ROMs Directory  
-                                # Cycle between common ROM directories for retro gaming systems
-                                current_roms = settings["roms_dir"]
-                                roms_options = [
-                                    "/userdata/roms",             # Batocera standard
-                                    "/storage/roms",              # Knulli standard
-                                    "/opt/muos/device/ROMS",      # muOS standard
-                                    "/media/SDCARD/ROMS",         # muOS SD card
-                                    "/storage/SDCARD/roms",       # Knulli SD card
-                                    "/media/fat/games",           # MiSTer FPGA
-                                    "/storage/roms2",             # Batocera second drive
-                                    "/home/ark/roms",             # ArkOS
-                                    "/roms2/ports",               # Batocera ports
-                                    os.path.join(SCRIPT_DIR, "roms")  # Script directory
-                                ]
-                                try:
-                                    current_index = roms_options.index(current_roms)
-                                    settings["roms_dir"] = roms_options[(current_index + 1) % len(roms_options)]
-                                except ValueError:
-                                    settings["roms_dir"] = roms_options[0]
-                                save_settings(settings)
-                    elif event.key == pygame.K_y:  # Y key = Detail view
-                        if mode == "games" and not show_game_details and game_list:
+                                # Open folder browser
+                                show_folder_browser = True
+                                # Use current roms_dir or fallback to a sensible default
+                                current_roms = settings.get("roms_dir", "")
+                                if not current_roms or not os.path.exists(os.path.dirname(current_roms)):
+                                    # Use a fallback based on environment
+                                    if os.path.exists("/userdata") and os.access("/userdata", os.R_OK):
+                                        folder_browser_current_path = "/userdata/roms"
+                                    else:
+                                        folder_browser_current_path = os.path.expanduser("~")  # Home directory
+                                else:
+                                    folder_browser_current_path = current_roms
+                                load_folder_contents(folder_browser_current_path)
+                    elif event.key == pygame.K_y:  # Y key = Detail view / Select folder
+                        if show_folder_browser:
+                            # Select current folder path
+                            settings["roms_dir"] = folder_browser_current_path
+                            save_settings(settings)
+                            show_folder_browser = False
+                        elif mode == "games" and not show_game_details and game_list:
                             # Show details modal for current game
                             current_game_detail = game_list[highlighted]
                             show_game_details = True
                     elif event.key == pygame.K_ESCAPE:  # Escape = Back (Button 3)
-                        if show_game_details:
+                        if show_folder_browser:
+                            # Close folder browser
+                            show_folder_browser = False
+                        elif show_game_details:
                             # Close details modal
                             show_game_details = False
                             current_game_detail = None
@@ -1491,7 +1689,11 @@ try:
                         # Skip keyboard navigation if joystick is connected (prevents double input)
                         if joystick is not None:
                             continue
-                        if mode == "games" and settings["view_type"] == "grid":
+                        if show_folder_browser:
+                            # Folder browser navigation
+                            if folder_browser_items and folder_browser_highlighted > 0:
+                                folder_browser_highlighted -= 1
+                        elif mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move up
                             cols = 4
                             if highlighted >= cols:
@@ -1511,7 +1713,11 @@ try:
                         # Skip keyboard navigation if joystick is connected (prevents double input)
                         if joystick is not None:
                             continue
-                        if mode == "games" and settings["view_type"] == "grid":
+                        if show_folder_browser:
+                            # Folder browser navigation
+                            if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
+                                folder_browser_highlighted += 1
+                        elif mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move down
                             cols = 4
                             if highlighted + cols < len(game_list):
@@ -1571,11 +1777,19 @@ try:
                     right_shoulder_button = get_controller_button("right_shoulder")
                     
                     if event.button == select_button:  # Select
-                        if mode == "systems":
+                        if show_folder_browser:
+                            # Navigate into folder or go back
+                            if folder_browser_items and folder_browser_highlighted < len(folder_browser_items):
+                                selected_item = folder_browser_items[folder_browser_highlighted]
+                                if selected_item["type"] in ["folder", "parent"]:
+                                    folder_browser_current_path = selected_item["path"]
+                                    load_folder_contents(folder_browser_current_path)
+                        elif mode == "systems":
                             systems_count = len(data)
                             if highlighted == systems_count:  # Settings option
                                 mode = "settings"
                                 highlighted = 0
+                                settings_scroll_offset = 0
                             else:
                                 selected_system = highlighted
                                 current_page = 0
@@ -1639,33 +1853,34 @@ try:
                                     settings["work_dir"] = work_options[0]
                                 save_settings(settings)
                             elif highlighted == 9:  # ROMs Directory  
-                                # Cycle between common ROM directories for retro gaming systems
-                                current_roms = settings["roms_dir"]
-                                roms_options = [
-                                    "/userdata/roms",             # Batocera standard
-                                    "/storage/roms",              # Knulli standard
-                                    "/opt/muos/device/ROMS",      # muOS standard
-                                    "/media/SDCARD/ROMS",         # muOS SD card
-                                    "/storage/SDCARD/roms",       # Knulli SD card
-                                    "/media/fat/games",           # MiSTer FPGA
-                                    "/storage/roms2",             # Batocera second drive
-                                    "/home/ark/roms",             # ArkOS
-                                    "/roms2/ports",               # Batocera ports
-                                    os.path.join(SCRIPT_DIR, "roms")  # Script directory
-                                ]
-                                try:
-                                    current_index = roms_options.index(current_roms)
-                                    settings["roms_dir"] = roms_options[(current_index + 1) % len(roms_options)]
-                                except ValueError:
-                                    settings["roms_dir"] = roms_options[0]
-                                save_settings(settings)
-                    elif event.button == detail_button:  # Detail view
-                        if mode == "games" and not show_game_details and game_list:
+                                # Open folder browser
+                                show_folder_browser = True
+                                # Use current roms_dir or fallback to a sensible default
+                                current_roms = settings.get("roms_dir", "")
+                                if not current_roms or not os.path.exists(os.path.dirname(current_roms)):
+                                    # Use a fallback based on environment
+                                    if os.path.exists("/userdata") and os.access("/userdata", os.R_OK):
+                                        folder_browser_current_path = "/userdata/roms"
+                                    else:
+                                        folder_browser_current_path = os.path.expanduser("~")  # Home directory
+                                else:
+                                    folder_browser_current_path = current_roms
+                                load_folder_contents(folder_browser_current_path)
+                    elif event.button == detail_button:  # Detail view / Select folder
+                        if show_folder_browser:
+                            # Select current folder path
+                            settings["roms_dir"] = folder_browser_current_path
+                            save_settings(settings)
+                            show_folder_browser = False
+                        elif mode == "games" and not show_game_details and game_list:
                             # Show details modal for current game
                             current_game_detail = game_list[highlighted]
                             show_game_details = True
                     elif event.button == back_button:  # Back
-                        if show_game_details:
+                        if show_folder_browser:
+                            # Close folder browser
+                            show_folder_browser = False
+                        elif show_game_details:
                             # Close details modal
                             show_game_details = False
                             current_game_detail = None
@@ -1728,7 +1943,17 @@ try:
                     movement_occurred = False
                     
                     if hat[1] != 0 and not show_game_details:  # Up or Down
-                        if mode == "games" and settings["view_type"] == "grid":
+                        if show_folder_browser:
+                            # Folder browser navigation
+                            if hat[1] == 1:  # Up
+                                if folder_browser_items and folder_browser_highlighted > 0:
+                                    folder_browser_highlighted -= 1
+                                    movement_occurred = True
+                            else:  # Down
+                                if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
+                                    folder_browser_highlighted += 1
+                                    movement_occurred = True
+                        elif mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move up/down
                             cols = 4
                             if hat[1] == 1:  # Up
