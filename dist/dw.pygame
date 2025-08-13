@@ -3974,7 +3974,10 @@ try:
                                 elif mode == "system_settings":
                                     system_settings_highlighted = (system_settings_highlighted - 1) % max_items
                                 else:
-                                    highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
+                                    if input_matches_action(event, "up"):
+                                        highlighted = (highlighted - 1) % max_items
+                                    elif input_matches_action(event, "down"):
+                                        highlighted = (highlighted + 1) % max_items
                                 movement_occurred = True
                     elif event.key == pygame.K_DOWN and not show_game_details:
                         # Skip keyboard navigation if joystick is connected (prevents double input)
@@ -4100,42 +4103,42 @@ try:
                                 # Navigate character selection up/down
                                 chars_per_row = 13
                                 total_chars = 36  # A-Z + 0-9
-                                if hat[1] == 1:  # Up
+                                if input_matches_action(event, "up"):
                                     if folder_name_char_index >= chars_per_row:
                                         folder_name_char_index -= chars_per_row
                                         movement_occurred = True
-                                else:  # Down
+                                elif input_matches_action(event, "down"):
                                     if folder_name_char_index + chars_per_row < total_chars:
                                         folder_name_char_index += chars_per_row
                                         movement_occurred = True
                             elif show_folder_browser:
                                 # Folder browser navigation
-                                if hat[1] == 1:  # Up
+                                if input_matches_action(event, "up"):
                                     if folder_browser_items and folder_browser_highlighted > 0:
                                         folder_browser_highlighted -= 1
                                         movement_occurred = True
-                                else:  # Down
+                                elif input_matches_action(event, "down"):
                                     if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
                                         folder_browser_highlighted += 1
                                         movement_occurred = True
                             elif mode == "add_systems":
                                 # Add systems navigation
-                                if hat[1] == 1:  # Up
+                                if input_matches_action(event, "up"):
                                     if available_systems and add_systems_highlighted > 0:
                                         add_systems_highlighted -= 1
                                         movement_occurred = True
-                                else:  # Down
+                                elif input_matches_action(event, "down"):
                                     if available_systems and add_systems_highlighted < len(available_systems) - 1:
                                         add_systems_highlighted += 1
                                         movement_occurred = True
                             elif mode == "games" and settings["view_type"] == "grid":
                                 # Grid navigation: move up/down
                                 cols = 4
-                                if hat[1] == 1:  # Up
+                                if input_matches_action(event, "up"):
                                     if highlighted >= cols:
                                         highlighted -= cols
                                         movement_occurred = True
-                                else:  # Down
+                                elif input_matches_action(event, "down"):
                                     if highlighted + cols < len(game_list):
                                         highlighted += cols
                                         movement_occurred = True
@@ -4153,9 +4156,15 @@ try:
                                 
                                 if max_items > 0:
                                     if mode == "add_systems":
-                                        add_systems_highlighted = (add_systems_highlighted - 1) % max_items if hat[1] == 1 else (add_systems_highlighted + 1) % max_items
+                                        if input_matches_action(event, "up"):
+                                            add_systems_highlighted = (add_systems_highlighted - 1) % max_items
+                                        elif input_matches_action(event, "down"):
+                                            add_systems_highlighted = (add_systems_highlighted + 1) % max_items
                                     else:
-                                        highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
+                                        if input_matches_action(event, "up"):
+                                            highlighted = (highlighted - 1) % max_items
+                                        elif input_matches_action(event, "down"):
+                                            highlighted = (highlighted + 1) % max_items
                                     movement_occurred = True
                         elif hat[0] != 0 and not show_game_details:  # Left or Right
                             if show_folder_name_input:
@@ -4212,42 +4221,42 @@ try:
                                 # Navigate character selection up/down
                                 chars_per_row = 13
                                 total_chars = 36  # A-Z + 0-9
-                                if hat[1] == 1:  # Up
+                                if input_matches_action(event, "up"):
                                     if folder_name_char_index >= chars_per_row:
                                         folder_name_char_index -= chars_per_row
                                         movement_occurred = True
-                                else:  # Down
+                                elif input_matches_action(event, "down"):
                                     if folder_name_char_index + chars_per_row < total_chars:
                                         folder_name_char_index += chars_per_row
                                         movement_occurred = True
                             elif show_folder_browser:
                                 # Folder browser navigation
-                                if hat[1] == 1:  # Up
+                                if input_matches_action(event, "up"):
                                     if folder_browser_items and folder_browser_highlighted > 0:
                                         folder_browser_highlighted -= 1
                                         movement_occurred = True
-                                else:  # Down
+                                elif input_matches_action(event, "down"):
                                     if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
                                         folder_browser_highlighted += 1
                                         movement_occurred = True
                             elif mode == "add_systems":
                                 # Add systems navigation
-                                if hat[1] == 1:  # Up
+                                if input_matches_action(event, "up"):
                                     if available_systems and add_systems_highlighted > 0:
                                         add_systems_highlighted -= 1
                                         movement_occurred = True
-                                else:  # Down
+                                elif input_matches_action(event, "down"):
                                     if available_systems and add_systems_highlighted < len(available_systems) - 1:
                                         add_systems_highlighted += 1
                                         movement_occurred = True
                             elif mode == "games" and settings["view_type"] == "grid":
                                 # Grid navigation: move up/down
                                 cols = 4
-                                if hat[1] == 1:  # Up
+                                if input_matches_action(event, "up"):
                                     if highlighted >= cols:
                                         highlighted -= cols
                                         movement_occurred = True
-                                else:  # Down
+                                elif input_matches_action(event, "down"):
                                     if highlighted + cols < len(game_list):
                                         highlighted += cols
                                         movement_occurred = True
@@ -4265,9 +4274,15 @@ try:
                                 
                                 if max_items > 0:
                                     if mode == "add_systems":
-                                        add_systems_highlighted = (add_systems_highlighted - 1) % max_items if hat[1] == 1 else (add_systems_highlighted + 1) % max_items
+                                        if input_matches_action(event, "up"):
+                                            add_systems_highlighted = (add_systems_highlighted - 1) % max_items
+                                        elif input_matches_action(event, "down"):
+                                            add_systems_highlighted = (add_systems_highlighted + 1) % max_items
                                     else:
-                                        highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
+                                        if input_matches_action(event, "up"):
+                                            highlighted = (highlighted - 1) % max_items
+                                        elif input_matches_action(event, "down"):
+                                            highlighted = (highlighted + 1) % max_items
                                     movement_occurred = True
                         elif hat[0] != 0 and not show_game_details:  # Left or Right
                             if show_folder_name_input:
@@ -4712,11 +4727,11 @@ try:
                             chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
                             chars_per_row = 13
                             total_chars = len(chars)
-                            if hat[1] == 1:  # Up
+                            if input_matches_action(event, "up"):
                                 if search_cursor_position >= chars_per_row:
                                     search_cursor_position -= chars_per_row
                                     movement_occurred = True
-                            else:  # Down
+                            elif input_matches_action(event, "down"):
                                 if search_cursor_position + chars_per_row < total_chars:
                                     search_cursor_position += chars_per_row
                                     movement_occurred = True
@@ -4724,42 +4739,42 @@ try:
                             # Navigate character selection up/down
                             chars_per_row = 13
                             total_chars = 36  # A-Z + 0-9
-                            if hat[1] == 1:  # Up
+                            if input_matches_action(event, "up"):
                                 if folder_name_char_index >= chars_per_row:
                                     folder_name_char_index -= chars_per_row
                                     movement_occurred = True
-                            else:  # Down
+                            elif input_matches_action(event, "down"):
                                 if folder_name_char_index + chars_per_row < total_chars:
                                     folder_name_char_index += chars_per_row
                                     movement_occurred = True
                         elif show_folder_browser:
                             # Folder browser navigation
-                            if hat[1] == 1:  # Up
+                            if input_matches_action(event, "up"):
                                 if folder_browser_items and folder_browser_highlighted > 0:
                                     folder_browser_highlighted -= 1
                                     movement_occurred = True
-                            else:  # Down
+                            elif input_matches_action(event, "down"):
                                 if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
                                     folder_browser_highlighted += 1
                                     movement_occurred = True
                         elif mode == "add_systems":
                             # Add systems navigation
-                            if hat[1] == 1:  # Up
+                            if input_matches_action(event, "up"):
                                 if available_systems and add_systems_highlighted > 0:
                                     add_systems_highlighted -= 1
                                     movement_occurred = True
-                            else:  # Down
+                            elif input_matches_action(event, "down"):
                                 if available_systems and add_systems_highlighted < len(available_systems) - 1:
                                     add_systems_highlighted += 1
                                     movement_occurred = True
                         elif mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move up/down
                             cols = 4
-                            if hat[1] == 1:  # Up
+                            if input_matches_action(event, "up"):
                                 if highlighted >= cols:
                                     highlighted -= cols
                                     movement_occurred = True
-                            else:  # Down
+                            elif input_matches_action(event, "down"):
                                 if highlighted + cols < len(game_list):
                                     highlighted += cols
                                     movement_occurred = True
@@ -4789,7 +4804,10 @@ try:
                                 elif mode == "system_settings":
                                     system_settings_highlighted = (system_settings_highlighted - 1) % max_items
                                 else:
-                                    highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
+                                    if input_matches_action(event, "up"):
+                                        highlighted = (highlighted - 1) % max_items
+                                    elif input_matches_action(event, "down"):
+                                        highlighted = (highlighted + 1) % max_items
                                 movement_occurred = True
                     elif hat[0] != 0 and not show_game_details:  # Left or Right
                         if show_search_input:
@@ -4797,11 +4815,11 @@ try:
                             chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
                             chars_per_row = 13
                             total_chars = len(chars)
-                            if hat[0] < 0:  # Left
+                            if input_matches_action(event, "left"):
                                 if search_cursor_position % chars_per_row > 0:
                                     search_cursor_position -= 1
                                     movement_occurred = True
-                            else:  # Right
+                            elif input_matches_action(event, "right"):
                                 if search_cursor_position % chars_per_row < chars_per_row - 1 and search_cursor_position < total_chars - 1:
                                     search_cursor_position += 1
                                     movement_occurred = True
@@ -4809,11 +4827,11 @@ try:
                             # Navigate character selection left/right
                             chars_per_row = 13
                             total_chars = 36  # A-Z + 0-9
-                            if hat[0] < 0:  # Left
+                            if input_matches_action(event, "left"):
                                 if folder_name_char_index % chars_per_row > 0:
                                     folder_name_char_index -= 1
                                     movement_occurred = True
-                            else:  # Right
+                            elif input_matches_action(event, "right"):
                                 if folder_name_char_index % chars_per_row < chars_per_row - 1 and folder_name_char_index < total_chars - 1:
                                     folder_name_char_index += 1
                                     movement_occurred = True
