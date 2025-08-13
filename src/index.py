@@ -46,14 +46,32 @@ def log_error(error_msg, error_type=None, traceback_str=None):
     with open(LOG_FILE, "a") as f:
         f.write(log_message)
 
-# Initialize error log
-os.makedirs(os.path.dirname(LOG_FILE) if os.path.dirname(LOG_FILE) else ".", exist_ok=True)
-with open(LOG_FILE, "w") as f:
-    f.write(f"Error Log - Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-    f.write("-" * 80 + "\n")
+# Initialize error log with better error handling
+try:
+    log_dir = os.path.dirname(LOG_FILE) if os.path.dirname(LOG_FILE) else "."
+    os.makedirs(log_dir, exist_ok=True)
+    with open(LOG_FILE, "w") as f:
+        f.write(f"Error Log - Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Python version: {sys.version}\n")
+        f.write(f"Platform: {sys.platform}\n")
+        f.write(f"Script directory: {SCRIPT_DIR}\n")
+        f.write("-" * 80 + "\n")
+    print(f"Log file initialized: {LOG_FILE}")
+except Exception as e:
+    print(f"Failed to initialize log file: {e}")
+    # Continue without logging if we can't create the log file
 
 try:
+    print("Initializing pygame...")
     pygame.init()
+    print("Pygame initialized successfully")
+    
+    # Test basic pygame functionality
+    print("Testing pygame display...")
+    test_screen = pygame.display.set_mode((100, 100))
+    print("Display test successful")
+    pygame.display.quit()
+    print("Display cleanup successful")
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("ROM Downloader")
     clock = pygame.time.Clock()
@@ -2476,91 +2494,8 @@ try:
     # Load settings after all functions are defined
     settings = load_settings()
     
-    # Check and install NSZ package if needed
-    def check_and_install_nsz():
-        """Check if NSZ package is installed and install it if needed"""
-        # First try to import nsz directly to check if it's available
-        try:
-            # Redirect stdin to avoid EOFError during import
-            import sys
-            import os
-            from io import StringIO
-            
-            # Save original stdin
-            original_stdin = sys.stdin
-            
-            # Replace stdin with empty StringIO to prevent input() calls
-            sys.stdin = StringIO("")
-            
-            try:
-                import nsz
-                print("NSZ package is available and imported successfully")
-                return True
-            except EOFError:
-                # This is the error we're trying to fix - NSZ is trying to get input
-                # But the package is installed, so we can still use it with workarounds
-                print("NSZ package found but has input() calls during import")
-                print("NSZ will be available for command-line use")
-                return True  # Changed to True since package is installed
-            except ImportError:
-                # NSZ is not installed
-                print("NSZ package not found via import")
-            finally:
-                # Restore original stdin
-                sys.stdin = original_stdin
-                
-        except Exception as e:
-            print(f"Error checking NSZ package via import: {e}")
-        
-        # Check if NSZ is available as a module (even if import fails)
-        try:
-            import subprocess
-            import sys
-            
-            # Try running NSZ as a module
-            result = subprocess.run([sys.executable, "-m", "nsz", "--help"], 
-                                  capture_output=True, text=True, timeout=5)
-            if result.returncode == 0 or "usage:" in result.stdout.lower() or "nsz" in result.stdout.lower():
-                print("NSZ package is available as a module")
-                return True
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
-            print(f"NSZ module check failed: {e}")
-        
-        # If module check failed, try command-line tool
-        try:
-            import subprocess
-            result = subprocess.run(['nsz', '--version'], capture_output=True, text=True, timeout=5)
-            if result.returncode == 0:
-                print("NSZ command-line tool is available")
-                return True
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
-            print(f"NSZ command-line check failed: {e}")
-        
-        # Check if NSZ is installed in site-packages
-        try:
-            import pkg_resources
-            pkg_resources.get_distribution('nsz')
-            print("NSZ package found in site-packages")
-            return True
-        except:
-            pass
-        
-        # Final check - look for NSZ in Python path
-        try:
-            import importlib.util
-            spec = importlib.util.find_spec("nsz")
-            if spec is not None:
-                print("NSZ package found in Python path")
-                return True
-        except:
-            pass
-        
-        print("NSZ package not found. NSZ decompression will be disabled.")
-        print("If you have NSZ installed, it may not be accessible in this environment.")
-        return False
-    
-    # Check NSZ package on startup
-    nsz_available = check_and_install_nsz()
+    # NSZ functionality is available - will attempt decompression when needed
+    nsz_available = True
     
     # Load or create controller mapping
     mapping_exists = load_controller_mapping()
