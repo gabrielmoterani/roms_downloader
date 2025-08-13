@@ -1494,8 +1494,17 @@ try:
             
             # Handle different item formats (Switch vs regular)
             if isinstance(item, dict):
-                display_text = item['name']
-                original_name = item['name']
+                if 'name' in item:
+                    # Switch API format
+                    display_text = item['name']
+                    original_name = item['name']
+                elif 'filename' in item:
+                    # New format with filename and href
+                    display_text = os.path.splitext(item['filename'])[0]
+                    original_name = item['filename']
+                else:
+                    display_text = str(item)
+                    original_name = str(item)
             else:
                 # Remove file extension for display
                 display_text = os.path.splitext(item)[0]
@@ -1505,7 +1514,7 @@ try:
             if mode == "games":
                 text_x = 45  # Start after checkbox
                 boxart_url = data[selected_system].get('boxarts', '') if selected_system < len(data) else ''
-                thumbnail = get_thumbnail(item, boxart_url)
+                thumbnail = get_thumbnail(original_name, boxart_url)
                 
                 if thumbnail and thumbnail != "loading":
                     # Draw thumbnail with enhanced styling
@@ -1590,7 +1599,12 @@ try:
         
         # Game name
         if isinstance(game_item, dict):
-            game_name = game_item.get('name', 'Unknown Game')
+            if 'name' in game_item:
+                game_name = game_item.get('name', 'Unknown Game')
+            elif 'filename' in game_item:
+                game_name = os.path.splitext(game_item['filename'])[0]
+            else:
+                game_name = 'Unknown Game'
         else:
             game_name = os.path.splitext(game_item)[0] if isinstance(game_item, str) else 'Unknown Game'
         
@@ -2033,7 +2047,19 @@ try:
         filtered = []
         
         for game in games:
-            game_name = game.get('name', '').lower()
+            if isinstance(game, dict):
+                if 'name' in game:
+                    # Switch API format
+                    game_name = game.get('name', '').lower()
+                elif 'filename' in game:
+                    # New format with filename and href
+                    game_name = os.path.splitext(game.get('filename', ''))[0].lower()
+                else:
+                    game_name = str(game).lower()
+            else:
+                # Regular filename
+                game_name = os.path.splitext(str(game))[0].lower()
+            
             if query_lower in game_name:
                 filtered.append(game)
         
@@ -2063,13 +2089,21 @@ try:
             for idx, game_item in enumerate(selected_files):
                 if cancelled:
                     break
-                
+                log_error(f"Downloading game: {game_item}")
                 # Handle different game formats
                 if isinstance(game_item, dict):
-                    # Switch API format
-                    game_name = game_item['name']
-                    title_id = game_item['title_id']
-                    filename = f"{game_name} [{title_id}][v0].nsz"
+                    if 'name' in game_item:
+                        # Switch API format
+                        game_name = game_item['name']
+                        title_id = game_item['title_id']
+                        filename = f"{game_name} [{title_id}][v0].nsz"
+                    elif 'filename' in game_item:
+                        # New format with filename and href
+                        game_name = game_item['filename']
+                        filename = game_item['filename']
+                    else:
+                        game_name = str(game_item)
+                        filename = str(game_item)
                 else:
                     # Regular filename
                     game_name = game_item
@@ -2079,17 +2113,15 @@ try:
                 overall_progress = int((idx / total) * 100)
                 draw_progress_bar(f"Downloading {game_name} ({idx+1}/{total})", overall_progress)
                 
-                # Build download URL based on format
-                if sys_data.get('use_api', False) and 'download_url' in sys_data:
-                    # Switch API format - encode game name for URL
-                    encoded_filename = quote(filename)
-                    url = f"{sys_data['download_url']}{encoded_filename}"
-                elif 'download_url' in sys_data:
+                if 'download_url' in sys_data:
                     # Old format
                     url = f"{sys_data['download_url']}/{filename}"
                 elif 'url' in sys_data:
-                    # New format - construct URL by joining base URL with filename
-                    url = urljoin(sys_data['url'], filename)
+                    # New format - use href from object if available, otherwise construct URL
+                    if isinstance(game_item, dict) and 'href' in game_item:
+                        url = urljoin(sys_data['url'], game_item['href'])
+                    else:
+                        url = urljoin(sys_data['url'], filename)
                 try:
                     r = requests.get(url, stream=True, timeout=10)
                     r.raise_for_status()
@@ -2312,45 +2344,9 @@ try:
             draw_loading_message(f"Loading games for {data[system]['name']}...")
             sys_data = data[system]
             formats = sys_data.get('file_format', [])
-            
-            # Check if this uses API format (like Switch)
-            if sys_data.get('use_api', False) and 'api_url' in sys_data:
-                # API format - like Switch with pagination
-                api_url = sys_data['api_url']
-                if 'limit=' in api_url:
-                    # Add page offset to API URL
-                    base_url = api_url.split('?')[0]
-                    params = api_url.split('?')[1]
-                    limit = int([p.split('=')[1] for p in params.split('&') if p.startswith('limit=')][0])
-                    offset = page * limit
-                    paginated_url = f"{base_url}?{params}&offset={offset}"
-                else:
-                    paginated_url = api_url
-                
-                r = requests.get(paginated_url, timeout=10)
-                response = r.json()
-                
-                files = []
-                for game_id, game_data in response.items():
-                    game_name = game_data.get('name', {}).get('en', game_data.get('name', {}).get('default', game_id))
-                    files.append({
-                        'name': game_name,
-                        'title_id': game_id,
-                        'size': game_data.get('size', 0),
-                        'banner_url': game_data.get('banner_url'),
-                        'icon_url': game_data.get('icon_url'),
-                        'screenshots_urls': game_data.get('screenshots_urls', [])
-                    })
-                
-                # Apply USA filter if enabled and system supports it
-                if settings.get("usa_only", False) and sys_data.get('should_filter_usa', True):
-                    usa_regex = sys_data.get('usa_regex', '(USA)')
-                    files = [f for f in files if re.search(usa_regex, f['name'])]
-                
-                return sorted(files, key=lambda x: x['name'])
-            
+
             # Check if this is the old JSON API format
-            elif 'list_url' in sys_data:
+            if 'list_url' in sys_data:
                 # Old format - JSON API
                 list_url = sys_data['list_url']
                 array_path = sys_data.get('list_json_file_location', "files")
@@ -2399,35 +2395,47 @@ try:
                     files = []
                     for match in matches:
                         try:
-                            # Try to get the filename from named groups
+                            # Try to get the filename and href from named groups
+                            href = None
+                            filename = None
+                            
+                            if 'href' in match.groupdict():
+                                href = match.groupdict().get('href')
                             if 'text' in match.groupdict():
-                                filename = decode_filename(match.group('text'))
-                            elif 'href' in match.groupdict():
-                                filename = decode_filename(match.group('href'))
+                                filename = decode_filename(match.groupdict().get('text'))
                             else:
                                 # Fallback to first group
                                 filename = decode_filename(match.group(1))
-                            
+
+                            if href and not filename:
+                                filename = decode_filename(href)
+                                                    # Filter out filenames that start with unknown/problematic characters
+                            if filename and not filename[0].isascii():
+                                continue
                             # Filter by file format
                             if any(filename.lower().endswith(ext.lower()) for ext in formats):
-                                files.append(filename)
+                                files.append({'filename': filename, 'href': href})
                         except:
                             continue
                 else:
                     # Simple regex for href links
-                    matches = re.findall(r'<a href="([^"]+)"[^>]*>([^<]+)</a>', html_content)
+                    matches = re.findall(regex_pattern, html_content)
                     files = []
                     for href, text in matches:
                         filename = decode_filename(text or href)
+                        # Filter out filenames that start with unknown/problematic characters
+                        if filename and not filename[0].isascii():
+                            continue
                         if any(filename.lower().endswith(ext.lower()) for ext in formats):
-                            files.append(filename)
+                            files.append({'filename': filename, 'href': href})
+                    log_error(f"Files: {files}")
                 
                 # Apply USA filter if enabled and system supports it
                 if settings.get("usa_only", False) and sys_data.get('should_filter_usa', True):
                     usa_regex = sys_data.get('usa_regex', '(USA)')
-                    files = [f for f in files if re.search(usa_regex, f)]
+                    files = [f for f in files if re.search(usa_regex, f['filename'])]
                 
-                return sorted(files)
+                return sorted(files, key=lambda x: x['filename'])
             
             return []
         except Exception as e:
@@ -2669,9 +2677,14 @@ try:
         # Get display name for current item
         current_item = items[current_index]
         if isinstance(current_item, dict):
-            current_name = current_item.get('name', '')
+            if 'name' in current_item:
+                current_name = current_item.get('name', '')
+            elif 'filename' in current_item:
+                current_name = os.path.splitext(current_item.get('filename', ''))[0]
+            else:
+                current_name = str(current_item)
         else:
-            current_name = current_item
+            current_name = str(current_item)
         
         if not current_name:
             return current_index
@@ -2680,13 +2693,29 @@ try:
         if direction > 0:  # Moving right/forward
             for i in range(current_index + 1, len(items)):
                 item = items[i]
-                item_name = item.get('name', '') if isinstance(item, dict) else item
+                if isinstance(item, dict):
+                    if 'name' in item:
+                        item_name = item.get('name', '')
+                    elif 'filename' in item:
+                        item_name = os.path.splitext(item.get('filename', ''))[0]
+                    else:
+                        item_name = str(item)
+                else:
+                    item_name = str(item)
                 if item_name and item_name[0].upper() > current_letter:
                     return i
         else:  # Moving left/backward
             for i in range(current_index - 1, -1, -1):
                 item = items[i]
-                item_name = item.get('name', '') if isinstance(item, dict) else item
+                if isinstance(item, dict):
+                    if 'name' in item:
+                        item_name = item.get('name', '')
+                    elif 'filename' in item:
+                        item_name = os.path.splitext(item.get('filename', ''))[0]
+                    else:
+                        item_name = str(item)
+                else:
+                    item_name = str(item)
                 if item_name and item_name[0].upper() < current_letter:
                     return i
         return current_index
