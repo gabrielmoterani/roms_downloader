@@ -578,7 +578,11 @@ try:
     def get_visible_systems():
         """Get list of systems that are not hidden and not list_systems"""
         system_settings = settings.get("system_settings", {})
-        return [d for d in data if not d.get('list_systems', False) and not system_settings.get(d['name'], {}).get('hidden', False)]
+        visible_systems = [d for d in data if not d.get('list_systems', False) and not system_settings.get(d['name'], {}).get('hidden', False)]
+        # Remove the last system from the main menu
+        if len(visible_systems) > 0:
+            visible_systems = visible_systems[:-1]
+        return visible_systems
 
     def get_system_index_by_name(system_name):
         """Get the original data array index for a system by name"""
@@ -1755,19 +1759,32 @@ try:
 
     def draw_menu(title, items, selected_indices):
         screen.fill(BACKGROUND)
-        y = 20  # Start with more margin
+        y = 30  # Start with more margin
         
-        # Draw title with better styling
-        title_font = pygame.font.Font(None, int(FONT_SIZE * 1.3))  # Larger title
+        # Enhanced title styling with gradient-like effect
+        title_font = pygame.font.Font(None, int(FONT_SIZE * 1.5))  # Even larger title
         title_surf = title_font.render(title, True, TEXT_PRIMARY)
-        screen.blit(title_surf, (20, y))
         
-        # Draw subtle underline for title
+        # Add a subtle background for the title area
+        screen_width = screen.get_width()
+        title_bg_rect = pygame.Rect(0, 0, screen_width, title_surf.get_height() + 40)
+        pygame.draw.rect(screen, SURFACE, title_bg_rect)
+        
+        # Center the title horizontally
+        title_x = (screen_width - title_surf.get_width()) // 2
+        screen.blit(title_surf, (title_x, y))
+        
+        # Draw enhanced underline for title with gradient effect
         title_width = title_surf.get_width()
-        pygame.draw.line(screen, PRIMARY, (20, y + title_surf.get_height() + 5), 
-                        (20 + title_width, y + title_surf.get_height() + 5), 2)
+        underline_y = y + title_surf.get_height() + 8
+        # Main underline
+        pygame.draw.line(screen, PRIMARY, (title_x, underline_y), 
+                        (title_x + title_width, underline_y), 3)
+        # Subtle glow effect
+        pygame.draw.line(screen, PRIMARY_LIGHT, (title_x, underline_y + 1), 
+                        (title_x + title_width, underline_y + 1), 1)
         
-        y += title_surf.get_height() + 20
+        y += title_surf.get_height() + 35
 
         # Draw download instruction if in games mode and games are selected
         if mode == "games" and selected_games:
@@ -1805,17 +1822,31 @@ try:
         start_idx = max(0, highlighted - items_per_page // 2)
         visible_items = items[start_idx:start_idx + items_per_page]
         
-        # Draw items
+        # Draw items with enhanced styling
         for i, item in enumerate(visible_items):
             actual_idx = start_idx + i
             is_highlighted = actual_idx == highlighted
             is_selected = actual_idx in selected_indices
             
-            # Draw background for highlighted items
+            # Enhanced background for items with subtle shadows and gradients
+            item_margin = 15
+            item_rect = pygame.Rect(item_margin, y - 5, screen.get_width() - (item_margin * 2), row_height)
+            
             if is_highlighted:
-                item_rect = pygame.Rect(10, y - 3, screen.get_width() - 20, row_height - 2)
-                pygame.draw.rect(screen, SURFACE, item_rect)
-                pygame.draw.rect(screen, PRIMARY, item_rect, 2)
+                # Shadow effect for highlighted items
+                shadow_rect = pygame.Rect(item_margin + 2, y - 3, screen.get_width() - (item_margin * 2), row_height)
+                pygame.draw.rect(screen, (0, 0, 0, 30), shadow_rect)
+                
+                # Gradient-like background for highlighted items
+                pygame.draw.rect(screen, SURFACE_HOVER, item_rect)
+                pygame.draw.rect(screen, PRIMARY, item_rect, 3)
+                
+                # Add subtle inner glow
+                inner_rect = pygame.Rect(item_margin + 3, y - 2, screen.get_width() - (item_margin * 2) - 6, row_height - 6)
+                pygame.draw.rect(screen, PRIMARY_LIGHT, inner_rect, 1)
+            elif mode == "systems":
+                # For systems menu, use simple list style without borders
+                pass
             
             # Determine text color and selection indicator
             if is_highlighted:
@@ -1897,11 +1928,39 @@ try:
                     
                     text_x = thumb_x + THUMBNAIL_SIZE[0] + 15  # Move text after thumbnail
             else:
-                text_x = 25  # Standard margin for non-games
+                text_x = 35  # Standard margin for non-games with more padding
+                
+                # Add simple visual indicators for system menu items
+                if mode == "systems":
+                    icon_x = item_margin + 12
+                    icon_y = y + (row_height - 16) // 2
+                    icon_size = 12
+                    
+                    # Simple geometric icons for different items
+                    if item == "Settings":
+                        # Gear icon (simple squares pattern)
+                        gear_color = SECONDARY if is_highlighted else TEXT_DISABLED
+                        pygame.draw.rect(screen, gear_color, (icon_x, icon_y, icon_size, icon_size), 2)
+                        pygame.draw.rect(screen, gear_color, (icon_x + 3, icon_y + 3, icon_size - 6, icon_size - 6))
+                    else:
+                        # Game controller icon (simple rectangle with smaller rects)
+                        controller_color = PRIMARY if is_highlighted else TEXT_DISABLED
+                        pygame.draw.rect(screen, controller_color, (icon_x, icon_y + 2, icon_size, icon_size - 4), 2)
+                        pygame.draw.rect(screen, controller_color, (icon_x + 2, icon_y, 3, 3))
+                        pygame.draw.rect(screen, controller_color, (icon_x + icon_size - 5, icon_y, 3, 3))
+                    
+                    text_x += 25  # Move text over to make room for icon
             
-            # Draw text with proper color
-            item_surf = font.render(display_text, True, text_color)
+            # Draw text with enhanced styling
             text_y = y + (row_height - FONT_SIZE) // 2  # Center text vertically
+            
+            # For highlighted items in systems mode, use slightly larger font
+            if mode == "systems" and is_highlighted:
+                highlight_font = pygame.font.Font(None, int(FONT_SIZE * 1.1))
+                item_surf = highlight_font.render(display_text, True, text_color)
+            else:
+                item_surf = font.render(display_text, True, text_color)
+            
             screen.blit(item_surf, (text_x, text_y))
             y += row_height
 
@@ -3720,7 +3779,11 @@ try:
                 visible_systems = get_visible_systems()
                 regular_systems = [d['name'] for d in visible_systems]
                 systems_with_options = regular_systems + ["Settings"]
-                draw_menu("Select a System", systems_with_options, set())
+                
+                # Enhanced title with system info if a system was previously selected
+                title = "Select a System"
+                
+                draw_menu(title, systems_with_options, set())
             elif mode == "games":
                 if show_search_input:
                     draw_search_input_modal()
@@ -3729,10 +3792,15 @@ try:
                 elif game_list:  # Only draw if we have games
                     # Use filtered list if in search mode
                     current_game_list = filtered_game_list if search_mode and search_query else game_list
+                    # Get the current system name for the title
+                    system_name = data[selected_system]['name'] if selected_system < len(data) else "Unknown System"
+                    base_title = f"{system_name} Games"
+                    full_title = base_title + (f" (Search: {search_query})" if search_mode and search_query else "")
+                    
                     if settings["view_type"] == "grid":
-                        draw_grid_view("Select Games" + (f" (Search: {search_query})" if search_mode and search_query else ""), current_game_list, selected_games)
+                        draw_grid_view(full_title, current_game_list, selected_games)
                     else:
-                        draw_menu("Select Games" + (f" (Search: {search_query})" if search_mode and search_query else ""), current_game_list, selected_games)
+                        draw_menu(full_title, current_game_list, selected_games)
                 else:
                     draw_loading_message("No games found for this system")
             elif mode == "settings":
