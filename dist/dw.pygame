@@ -454,7 +454,19 @@ try:
             return None
         
         # Handle Nintendo Switch boxart with title ID extraction and pre-loaded API data
-        game_name = game_item if isinstance(game_item, str) else game_item.get('name', '')
+        if isinstance(game_item, str):
+            game_name = game_item
+        elif isinstance(game_item, dict):
+            if 'name' in game_item:
+                # Switch API format
+                game_name = game_item.get('name', '')
+            elif 'filename' in game_item:
+                # New format with filename and href
+                game_name = game_item.get('filename', '')
+            else:
+                game_name = str(game_item)
+        else:
+            game_name = str(game_item)
         
         # Check if this is Nintendo Switch and boxart_url contains the API URL
         if boxart_url and "api.ultranx.ru" in boxart_url:
@@ -492,7 +504,6 @@ try:
             cache_key = f"switch_{game_item.get('title_id', 'unknown')}"
         elif boxart_url:
             # Regular format - construct URL from boxart base + game name
-            game_name = game_item if isinstance(game_item, str) else game_item.get('name', '')
             base_name = os.path.splitext(game_name)[0]
             image_url = urljoin(boxart_url, f"{base_name}.png")
             cache_key = f"{boxart_url}_{game_name}"
@@ -519,7 +530,6 @@ try:
                 thread.start()
             else:
                 # Regular format - try multiple image formats
-                game_name = game_item if isinstance(game_item, str) else game_item.get('name', '')
                 base_name = os.path.splitext(game_name)[0]
                 image_formats = [".png", ".jpg", ".jpeg", ".gif", ".bmp"]
                 thread = Thread(target=load_image_with_fallback, args=(boxart_url, base_name, image_formats, cache_key, game_name))
@@ -1280,8 +1290,17 @@ try:
             
             # Handle different item formats
             if isinstance(item, dict):
-                display_text = item['name']
-                original_name = item['name']
+                if 'name' in item:
+                    # Switch API format
+                    display_text = item['name']
+                    original_name = item['name']
+                elif 'filename' in item:
+                    # New format with filename and href
+                    display_text = os.path.splitext(item['filename'])[0]
+                    original_name = item['filename']
+                else:
+                    display_text = str(item)
+                    original_name = str(item)
             else:
                 display_text = os.path.splitext(item)[0]
                 original_name = item
