@@ -1290,8 +1290,9 @@ try:
         highlighted_row = highlighted // cols
         highlighted_col = highlighted % cols
         
-        # Calculate scroll offset to keep highlighted item visible
-        start_row = max(0, highlighted_row - rows_per_screen // 2)
+        # Calculate scroll offset to keep highlighted item in the second row (index 1)
+        target_row = 1  # Second row (0-indexed)
+        start_row = max(0, highlighted_row - target_row)
         visible_items = items[start_row * cols:(start_row + rows_per_screen) * cols]
         
         # Draw grid items
