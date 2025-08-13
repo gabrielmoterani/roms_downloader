@@ -100,6 +100,9 @@ try:
     
     # Settings will be loaded after functions are defined
     settings = {}
+    
+    # Controller mapping will be loaded/created dynamically
+    controller_mapping = {}
     settings_list = [
         "Enable Box-art Display",
         "Enable Image Cache", 
@@ -108,9 +111,10 @@ try:
         "View Type",
         "USA Games Only",
         "Debug Controller",
-        "Controller Type",
         "Work Directory",
-        "ROMs Directory"
+        "ROMs Directory",
+        "Nintendo Switch Keys",
+        "Remap Controller"
     ]
 
     # Directories will be created after settings are loaded
@@ -150,9 +154,9 @@ try:
             "view_type": "list",
             "usa_only": False,
             "debug_controller": False,
-            "controller_type": "rg35xx",
             "work_dir": default_work_dir,
-            "roms_dir": default_roms_dir
+            "roms_dir": default_roms_dir,
+            "switch_keys_path": ""
         }
         
         try:
@@ -179,6 +183,141 @@ try:
                 json.dump(settings_to_save, f, indent=2)
         except Exception as e:
             log_error("Failed to save settings", type(e).__name__, traceback.format_exc())
+
+    def load_controller_mapping():
+        """Load controller mapping from file or create new mapping"""
+        global controller_mapping
+        
+        mapping_file = os.path.join(os.path.dirname(CONFIG_FILE), "controller_mapping.json")
+        
+        try:
+            if os.path.exists(mapping_file):
+                with open(mapping_file, 'r') as f:
+                    controller_mapping = json.load(f)
+                    print("Controller mapping loaded from file")
+                    return True
+            else:
+                print("No controller mapping found, will need to create new mapping")
+                controller_mapping = {}
+                return False
+        except Exception as e:
+            log_error("Failed to load controller mapping", type(e).__name__, traceback.format_exc())
+            controller_mapping = {}
+            return False
+
+    def save_controller_mapping():
+        """Save controller mapping to file"""
+        mapping_file = os.path.join(os.path.dirname(CONFIG_FILE), "controller_mapping.json")
+        
+        try:
+            os.makedirs(os.path.dirname(mapping_file), exist_ok=True)
+            with open(mapping_file, 'w') as f:
+                json.dump(controller_mapping, f, indent=2)
+            print("Controller mapping saved")
+        except Exception as e:
+            log_error("Failed to save controller mapping", type(e).__name__, traceback.format_exc())
+
+    def needs_controller_mapping():
+        """Check if we need to collect controller mapping"""
+        essential_buttons = ["select", "back", "start", "detail", "up", "down", "left", "right"]
+        return not controller_mapping or not all(button in controller_mapping for button in essential_buttons)
+
+    def collect_controller_mapping():
+        """Collect controller button mapping from user input"""
+        global controller_mapping, show_controller_mapping
+        
+        essential_buttons = [
+            ("up", "D-pad UP"),
+            ("down", "D-pad DOWN"), 
+            ("left", "D-pad LEFT"),
+            ("right", "D-pad RIGHT"),
+            ("select", "SELECT/CONFIRM button (usually A)"),
+            ("back", "BACK/CANCEL button (usually B)"),
+            ("start", "START/MENU button"),
+            ("detail", "DETAIL/SECONDARY button (usually Y)"),
+            ("left_shoulder", "Left Shoulder button (L/LB)"),
+            ("right_shoulder", "Right Shoulder button (R/RB)")
+        ]
+        
+        controller_mapping = {}
+        current_button_index = 0
+        collecting_input = True
+        last_input_time = 0
+        
+        while collecting_input and current_button_index < len(essential_buttons):
+            current_time = pygame.time.get_ticks()
+            
+            # Clear screen
+            screen.fill(WHITE)
+            
+            # Title
+            title_text = "Controller Setup"
+            title_surf = font.render(title_text, True, BLACK)
+            screen.blit(title_surf, (20, 20))
+            
+            # Current button instruction
+            button_key, button_description = essential_buttons[current_button_index]
+            instruction_text = f"Press the {button_description}"
+            instruction_surf = font.render(instruction_text, True, BLACK)
+            screen.blit(instruction_surf, (20, 80))
+            
+            # Progress
+            progress_text = f"Button {current_button_index + 1} of {len(essential_buttons)}"
+            progress_surf = font.render(progress_text, True, GRAY)
+            screen.blit(progress_surf, (20, 120))
+            
+            # Show already mapped buttons
+            y_offset = 160
+            for i, (mapped_key, _) in enumerate(essential_buttons[:current_button_index]):
+                if mapped_key in controller_mapping:
+                    mapped_text = f"{mapped_key}: Button {controller_mapping[mapped_key]}"
+                    mapped_surf = font.render(mapped_text, True, GREEN)
+                    screen.blit(mapped_surf, (20, y_offset + i * 25))
+            
+            pygame.display.flip()
+            
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return False
+                elif event.type == pygame.JOYBUTTONDOWN:
+                    # Debounce input (prevent double registration)
+                    if current_time - last_input_time > 300:
+                        controller_mapping[button_key] = event.button
+                        print(f"Mapped {button_key} to button {event.button}")
+                        current_button_index += 1
+                        last_input_time = current_time
+                elif event.type == pygame.JOYHATMOTION:
+                    # Handle D-pad input
+                    if current_time - last_input_time > 300:
+                        hat_x, hat_y = event.value
+                        if button_key == "up" and hat_y == 1:
+                            controller_mapping[button_key] = ("hat", 0, 1)
+                            current_button_index += 1
+                            last_input_time = current_time
+                        elif button_key == "down" and hat_y == -1:
+                            controller_mapping[button_key] = ("hat", 0, -1)
+                            current_button_index += 1
+                            last_input_time = current_time
+                        elif button_key == "left" and hat_x == -1:
+                            controller_mapping[button_key] = ("hat", -1, 0)
+                            current_button_index += 1
+                            last_input_time = current_time
+                        elif button_key == "right" and hat_x == 1:
+                            controller_mapping[button_key] = ("hat", 1, 0)
+                            current_button_index += 1
+                            last_input_time = current_time
+                elif event.type == pygame.KEYDOWN:
+                    # Allow keyboard input for testing
+                    if event.key == pygame.K_ESCAPE:
+                        return False
+            
+            # Small delay to prevent CPU spinning
+            pygame.time.wait(16)
+        
+        # Save the completed mapping
+        save_controller_mapping()
+        return True
 
     def get_game_initials(game_name):
         """Extract first 3 initials from game name"""
@@ -583,14 +722,23 @@ try:
                 setting_value = "ON" if settings["usa_only"] else "OFF"
             elif actual_idx == 6:  # Debug Controller
                 setting_value = "ON" if settings["debug_controller"] else "OFF"
-            elif actual_idx == 7:  # Controller Type
-                setting_value = settings["controller_type"].upper()
-            elif actual_idx == 8:  # Work Directory
+            elif actual_idx == 7:  # Work Directory
                 work_dir = settings.get("work_dir", "")
                 setting_value = work_dir[-30:] + "..." if len(work_dir) > 30 else work_dir
-            elif actual_idx == 9:  # ROMs Directory
+            elif actual_idx == 8:  # ROMs Directory
                 roms_dir = settings.get("roms_dir", "")
                 setting_value = roms_dir[-30:] + "..." if len(roms_dir) > 30 else roms_dir
+            elif actual_idx == 9:  # Nintendo Switch Keys
+                keys_path = settings.get("switch_keys_path", "")
+                if keys_path and os.path.exists(keys_path):
+                    setting_value = keys_path[-30:] + "..." if len(keys_path) > 30 else keys_path
+                else:
+                    setting_value = "Not configured"
+            elif actual_idx == 10:  # Remap Controller
+                if controller_mapping:
+                    setting_value = f"{len(controller_mapping)} buttons mapped"
+                else:
+                    setting_value = "Not configured"
             
             setting_text = f"{setting_name}: {setting_value}"
             setting_surf = font.render(setting_text, True, color)
@@ -672,20 +820,10 @@ try:
         screen.blit(title_surf, (20, y))
         y += FONT_SIZE + 10
         
-        # Draw instructions
-        select_button_name = get_button_name("select")
-        back_button_name = get_button_name("back")
-        start_button_name = get_button_name("start")
-        detail_button_name = get_button_name("detail")
-        instructions = [
-            "Use D-pad to navigate",
-            f"Press {select_button_name} to select/unselect games",
-            f"Press {detail_button_name} to view details",
-            f"Press {back_button_name} to go back to systems",
-            f"Press {start_button_name} to download {len(selected_indices)} selected games"
-        ]
-        
-        for instruction in instructions:
+        # Draw download instruction if games are selected
+        if selected_indices:
+            start_button_name = get_button_name("start")
+            instruction = f"Press start to initiate downloading"
             inst_surf = font.render(instruction, True, GRAY)
             screen.blit(inst_surf, (20, y))
             y += FONT_SIZE + 5
@@ -700,8 +838,14 @@ try:
         start_x = 20
         start_y = y
         
-        # Calculate visible items
-        rows_per_screen = (screen_height - start_y - 50) // cell_height
+        # Calculate visible items (ensure at least 2 rows)
+        available_height = screen_height - start_y - 50
+        if available_height > 0:
+            calculated_rows = available_height // cell_height
+            rows_per_screen = max(2, calculated_rows)  # Minimum 2 rows
+        else:
+            # Extremely small screen, fallback to minimum
+            rows_per_screen = 2
         items_per_screen = cols * rows_per_screen
         
         # Calculate grid position of highlighted item
@@ -809,29 +953,10 @@ try:
         screen.blit(title_surf, (20, y))
         y += FONT_SIZE + 10
 
-        # Draw instructions based on mode
-        select_button_name = get_button_name("select")
-        back_button_name = get_button_name("back")
-        start_button_name = get_button_name("start")
-        detail_button_name = get_button_name("detail")
-        
-        if mode == "systems":
-            instructions = [
-                "Use D-pad to navigate",
-                f"Press {select_button_name} to select a system",
-                f"Press {back_button_name} to go back"
-            ]
-        else:  # games mode
-            instructions = [
-                "Use D-pad to navigate",
-                f"Press {select_button_name} to select/unselect games",
-                f"Press {detail_button_name} to view details",
-                f"Press {back_button_name} to go back to systems",
-                f"Press {start_button_name} to download {len(selected_games)} selected games"
-            ]
-        
-        # Draw instructions
-        for instruction in instructions:
+        # Draw download instruction if in games mode and games are selected
+        if mode == "games" and selected_games:
+            start_button_name = get_button_name("start")
+            instruction = f"Press start to initiate downloading"
             inst_surf = font.render(instruction, True, GRAY)
             screen.blit(inst_surf, (20, y))
             y += FONT_SIZE + 5
@@ -1052,7 +1177,12 @@ try:
         
         # Title
         if selected_system_to_add is not None:
-            title_text = f"Select ROM Folder for {selected_system_to_add['name']}"
+            if selected_system_to_add.get("type") == "work_dir":
+                title_text = f"Select Work Directory"
+            elif selected_system_to_add.get("type") == "switch_keys":
+                title_text = f"Select Nintendo Switch Keys File"
+            else:
+                title_text = f"Select ROM Folder for {selected_system_to_add['name']}"
         else:
             title_text = "Select Folder"
         title_surf = font.render(title_text, True, BLACK)
@@ -1076,12 +1206,27 @@ try:
         create_folder_button_name = get_button_name("create_folder")
         
         if selected_system_to_add is not None:
-            instructions = [
-                f"Use D-pad to navigate",
-                f"Press {select_button_name} to enter folder or create new folder",
-                f"Press {detail_button_name} to select this folder for {selected_system_to_add['name']}",
-                f"Press {back_button_name} to cancel"
-            ]
+            if selected_system_to_add.get("type") == "work_dir":
+                instructions = [
+                    f"Use D-pad to navigate",
+                    f"Press {select_button_name} to enter folder or create new folder",
+                    f"Press {detail_button_name} to select this folder as work directory",
+                    f"Press {back_button_name} to cancel"
+                ]
+            elif selected_system_to_add.get("type") == "switch_keys":
+                instructions = [
+                    f"Use D-pad to navigate",
+                    f"Press {select_button_name} to enter [DIR] or select [KEY] file",
+                    f"Press {detail_button_name} to select current folder path",
+                    f"Press {back_button_name} to cancel"
+                ]
+            else:
+                instructions = [
+                    f"Use D-pad to navigate",
+                    f"Press {select_button_name} to enter folder or create new folder",
+                    f"Press {detail_button_name} to select this folder for {selected_system_to_add['name']}",
+                    f"Press {back_button_name} to cancel"
+                ]
         else:
             instructions = [
                 f"Use D-pad to navigate",
@@ -1141,6 +1286,8 @@ try:
             elif item["type"] == "error":
                 display_name = f"[ERR] {item['name']}"
                 color = GRAY
+            elif item["type"] == "keys_file":
+                display_name = f"[KEY] {item['name']}"
             else:
                 display_name = item['name']
             
@@ -1299,6 +1446,7 @@ try:
                             os.remove(file_path)
                         break
 
+                    # Handle ZIP extraction
                     if filename.endswith(".zip") and sys_data.get('should_unzip', False):
                         draw_progress_bar(f"Extracting {filename}...", 0)
                         with ZipFile(file_path, 'r') as zip_ref:
@@ -1331,6 +1479,87 @@ try:
                         
                         if not cancelled:
                             os.remove(file_path)
+                    
+                    # Handle NSZ decompression for Nintendo Switch games
+                    elif filename.endswith(".nsz"):
+                        draw_progress_bar(f"Checking NSZ support for {filename}...", 0)
+                        try:
+                            import subprocess
+                            import shutil
+                            
+                            # Check if Nintendo Switch keys are configured and exist
+                            keys_path = settings.get("switch_keys_path", "")
+                            keys_available = False
+                            
+                            if keys_path:
+                                if os.path.isfile(keys_path) and keys_path.lower().endswith('.keys'):
+                                    # Direct file path
+                                    keys_available = True
+                                    actual_keys_path = keys_path
+                                elif os.path.isdir(keys_path):
+                                    # Directory path, look for prod.keys
+                                    prod_keys_path = os.path.join(keys_path, "prod.keys")
+                                    if os.path.exists(prod_keys_path):
+                                        keys_available = True
+                                        actual_keys_path = prod_keys_path
+                            
+                            # Also check default locations if not configured
+                            if not keys_available:
+                                default_keys_paths = [
+                                    os.path.expanduser("~/.switch/prod.keys"),
+                                    os.path.join(WORK_DIR, "keys.txt"),
+                                    os.path.join(WORK_DIR, "prod.keys")
+                                ]
+                                for default_path in default_keys_paths:
+                                    if os.path.exists(default_path):
+                                        keys_available = True
+                                        actual_keys_path = default_path
+                                        break
+                            
+                            if not keys_available:
+                                draw_progress_bar(f"NSZ decompression skipped - Nintendo Switch keys not found", 0)
+                                log_error(f"NSZ decompression skipped for {filename}: Nintendo Switch keys not found. Configure path in Settings > Nintendo Switch Keys")
+                                pygame.time.wait(2000)
+                            else:
+                                draw_progress_bar(f"Decompressing {filename}...", 0)
+                                
+                                # Set up environment for NSZ with keys
+                                env = os.environ.copy()
+                                
+                                # Copy keys to expected location if needed
+                                switch_dir = os.path.expanduser("~/.switch")
+                                if not os.path.exists(switch_dir):
+                                    os.makedirs(switch_dir, exist_ok=True)
+                                
+                                expected_keys = os.path.join(switch_dir, "prod.keys")
+                                if not os.path.exists(expected_keys) and actual_keys_path != expected_keys:
+                                    shutil.copy2(actual_keys_path, expected_keys)
+                                
+                                # Use nsz command-line tool to decompress with timeout
+                                result = subprocess.run([
+                                    'nsz', '-D', file_path
+                                ], capture_output=True, text=True, cwd=WORK_DIR, timeout=300, env=env)
+                                
+                                if result.returncode == 0:
+                                    draw_progress_bar(f"Decompressing {filename}... Complete", 100)
+                                    pygame.time.wait(500)
+                                    
+                                    # Remove original NSZ file after successful decompression
+                                    if os.path.exists(file_path):
+                                        os.remove(file_path)
+                                else:
+                                    log_error(f"NSZ decompression failed for {filename}: {result.stderr}")
+                                    draw_progress_bar(f"NSZ decompression failed for {filename}", 0)
+                                    pygame.time.wait(2000)
+                                
+                        except subprocess.TimeoutExpired:
+                            log_error(f"NSZ decompression timed out for {filename}")
+                            draw_progress_bar(f"NSZ decompression timed out for {filename}", 0)
+                            pygame.time.wait(2000)
+                        except Exception as e:
+                            log_error(f"NSZ decompression failed for {filename}: {e}")
+                            draw_progress_bar(f"NSZ decompression failed for {filename}", 0)
+                            pygame.time.wait(2000)
 
                     # Move files to ROMS
                     draw_progress_bar(f"Moving files to ROMS folder...", 0)
@@ -1490,6 +1719,13 @@ try:
                         entry_path = os.path.join(path, entry)
                         if os.path.isdir(entry_path) and not entry.startswith('.'):
                             items.append({"name": entry, "type": "folder", "path": entry_path})
+                    
+                    # Add .keys files if we're selecting Nintendo Switch keys
+                    if selected_system_to_add and selected_system_to_add.get("type") == "switch_keys":
+                        for entry in entries:
+                            entry_path = os.path.join(path, entry)
+                            if os.path.isfile(entry_path) and entry.lower().endswith('.keys'):
+                                items.append({"name": entry, "type": "keys_file", "path": entry_path})
                     
                 except PermissionError:
                     items.append({"name": "Permission denied", "type": "error", "path": path})
@@ -1715,6 +1951,21 @@ try:
 
     # Load settings after all functions are defined
     settings = load_settings()
+    
+    # Load or create controller mapping
+    mapping_exists = load_controller_mapping()
+    
+    # Debug: Print loaded mapping
+    print(f"DEBUG: Controller mapping loaded: {controller_mapping}")
+    print(f"DEBUG: Mapping exists: {mapping_exists}, Needs mapping: {needs_controller_mapping()}")
+    
+    # If no controller mapping exists or is incomplete, collect it on first run
+    if not mapping_exists or needs_controller_mapping():
+        print("Controller mapping needed - will be collected on startup")
+        show_controller_mapping = True
+    else:
+        print("Controller mapping is complete")
+        show_controller_mapping = False
 
     # Update data to include added systems
     try:
@@ -1793,21 +2044,57 @@ try:
     }
     
     def get_controller_button(action):
-        """Get the button number for a specific action based on current controller type"""
-        controller_type = settings.get("controller_type", "rg35xx")
-        navigation_map = CONTROLLER_NAVIGATION.get(controller_type, CONTROLLER_NAVIGATION["rg35xx"])
-        button_number = navigation_map.get(action)
-        print(f"get_controller_button({action}) - controller_type: {controller_type}, button_number: {button_number}")
-        return button_number
+        """Get the button number for a specific action based on dynamic controller mapping"""
+        if action in controller_mapping:
+            button_info = controller_mapping[action]
+            print(f"get_controller_button({action}) - button_info: {button_info}")
+            return button_info
+        else:
+            print(f"get_controller_button({action}) - not found in mapping")
+            return None
     
     def get_button_name(action):
-        """Get the display name for a button action based on current controller type"""
-        controller_type = settings.get("controller_type", "rg35xx")
-        button_number = get_controller_button(action)
-        if button_number is None:
+        """Get the display name for a button action based on dynamic controller mapping"""
+        button_info = get_controller_button(action)
+        if button_info is None:
             return action.upper()
-        button_mapping = CONTROLLER_MAPPINGS.get(controller_type, CONTROLLER_MAPPINGS["rg35xx"])
-        return button_mapping.get(button_number, f"Button {button_number}")
+        
+        # Handle different input types (both tuples and lists from JSON)
+        if ((isinstance(button_info, tuple) or isinstance(button_info, list)) and 
+            len(button_info) >= 3 and button_info[0] == "hat"):
+            # D-pad input
+            _, hat_x, hat_y = button_info[0:3]
+            if hat_y == 1:
+                return "D-pad UP"
+            elif hat_y == -1:
+                return "D-pad DOWN"
+            elif hat_x == -1:
+                return "D-pad LEFT"
+            elif hat_x == 1:
+                return "D-pad RIGHT"
+            else:
+                return "D-pad"
+        else:
+            # Regular button
+            return f"Button {button_info}"
+
+    def input_matches_action(event, action):
+        """Check if the pygame event matches the mapped action"""
+        button_info = get_controller_button(action)
+        if button_info is None:
+            return False
+            
+        if event.type == pygame.JOYBUTTONDOWN:
+            # Check regular button press
+            return isinstance(button_info, int) and event.button == button_info
+        elif event.type == pygame.JOYHATMOTION:
+            # Check D-pad/hat input (handle both tuples and lists from JSON)
+            if ((isinstance(button_info, tuple) or isinstance(button_info, list)) and 
+                len(button_info) >= 3 and button_info[0] == "hat"):
+                _, expected_x, expected_y = button_info[0:3]
+                return event.value == (expected_x, expected_y)
+        
+        return False
 
     # Game details modal state
     show_game_details = False
@@ -1985,6 +2272,16 @@ try:
             clock.tick(FPS)
             current_time = pygame.time.get_ticks()
             
+            # Check if we need to collect controller mapping first
+            if show_controller_mapping:
+                if collect_controller_mapping():
+                    show_controller_mapping = False
+                    print("Controller mapping completed successfully")
+                else:
+                    print("Controller mapping cancelled or failed")
+                    running = False
+                    break
+            
             # Update image cache from background threads
             update_image_cache()
                 
@@ -2099,34 +2396,23 @@ try:
                             elif highlighted == 6:  # Debug Controller
                                 settings["debug_controller"] = not settings["debug_controller"]
                                 save_settings(settings)
-                            elif highlighted == 7:  # Controller Type
-                                controller_types = ["generic", "xbox", "odin", "playstation", "nintendo", "rg35xx"]
-                                current_type = settings["controller_type"]
-                                try:
-                                    current_index = controller_types.index(current_type)
-                                    settings["controller_type"] = controller_types[(current_index + 1) % len(controller_types)]
-                                except ValueError:
-                                    settings["controller_type"] = controller_types[0]
-                                save_settings(settings)
-                            elif highlighted == 8:  # Work Directory
-                                # Cycle between common work directories for retro gaming systems
-                                current_work = settings["work_dir"]
-                                work_options = [
-                                    "/userdata/downloads",        # Batocera
-                                    "/userdata/system/downloads", # Batocera alternative
-                                    "/storage/downloads",         # Knulli
-                                    "/opt/system/downloads",      # muOS
-                                    "/tmp/downloads",             # General Linux temp
-                                    "/media/downloads",           # External storage
-                                    os.path.join(SCRIPT_DIR, "py_downloads")  # Script directory
-                                ]
-                                try:
-                                    current_index = work_options.index(current_work)
-                                    settings["work_dir"] = work_options[(current_index + 1) % len(work_options)]
-                                except ValueError:
-                                    settings["work_dir"] = work_options[0]
-                                save_settings(settings)
-                            elif highlighted == 9:  # ROMs Directory  
+                            elif highlighted == 7:  # Work Directory
+                                # Open folder browser for work directory selection
+                                show_folder_browser = True
+                                # Use current work_dir or fallback to a sensible default
+                                current_work = settings.get("work_dir", "")
+                                if not current_work or not os.path.exists(os.path.dirname(current_work)):
+                                    # Use a fallback based on environment
+                                    if os.path.exists("/userdata") and os.access("/userdata", os.R_OK):
+                                        folder_browser_current_path = "/userdata"
+                                    else:
+                                        folder_browser_current_path = os.path.expanduser("~")  # Home directory
+                                else:
+                                    folder_browser_current_path = current_work
+                                load_folder_contents(folder_browser_current_path)
+                                # Set a flag to indicate we're selecting work directory
+                                selected_system_to_add = {"name": "Work Directory", "type": "work_dir"}
+                            elif highlighted == 8:  # ROMs Directory  
                                 # Open folder browser
                                 show_folder_browser = True
                                 # Use current roms_dir or fallback to a sensible default
@@ -2140,6 +2426,26 @@ try:
                                 else:
                                     folder_browser_current_path = current_roms
                                 load_folder_contents(folder_browser_current_path)
+                            elif highlighted == 9:  # Nintendo Switch Keys
+                                # Open folder browser for .keys files
+                                show_folder_browser = True
+                                # Use current keys path or default to home directory
+                                current_keys = settings.get("switch_keys_path", "")
+                                if current_keys and os.path.exists(os.path.dirname(current_keys)):
+                                    folder_browser_current_path = os.path.dirname(current_keys)
+                                else:
+                                    # Default to ~/.switch directory or home
+                                    switch_dir = os.path.expanduser("~/.switch")
+                                    if os.path.exists(switch_dir):
+                                        folder_browser_current_path = switch_dir
+                                    else:
+                                        folder_browser_current_path = os.path.expanduser("~")
+                                load_folder_contents(folder_browser_current_path)
+                                # Set a flag to indicate we're selecting Nintendo Switch keys
+                                selected_system_to_add = {"name": "Nintendo Switch Keys", "type": "switch_keys"}
+                            elif highlighted == 10:  # Remap Controller
+                                # Trigger controller remapping
+                                show_controller_mapping = True
                         elif mode == "add_systems":
                             # Handle add systems selection
                             if available_systems and add_systems_highlighted < len(available_systems):
@@ -2157,44 +2463,59 @@ try:
                     elif event.key == pygame.K_y:  # Y key = Detail view / Select folder
                         if show_folder_browser:
                             if selected_system_to_add is not None:
-                                # Add system with selected folder
-                                system_name = selected_system_to_add['name']
-                                # Calculate relative path from ROMs directory
-                                roms_dir = settings.get("roms_dir", "/userdata/roms")
-                                
-                                # Debug: Print the paths
-                                print(f"Selected folder path: {folder_browser_current_path}")
-                                print(f"ROMs directory: {roms_dir}")
-                                
-                                if folder_browser_current_path.startswith(roms_dir):
-                                    rom_folder = os.path.relpath(folder_browser_current_path, roms_dir)
-                                    # If the selected path is the ROMs directory itself, use a default folder name
-                                    if rom_folder == ".":
+                                if selected_system_to_add.get("type") == "work_dir":
+                                    # Set work directory
+                                    settings["work_dir"] = folder_browser_current_path
+                                    save_settings(settings)
+                                    show_folder_browser = False
+                                    selected_system_to_add = None
+                                elif selected_system_to_add.get("type") == "switch_keys":
+                                    # Set Nintendo Switch keys path (for folder selection, not file)
+                                    settings["switch_keys_path"] = folder_browser_current_path
+                                    save_settings(settings)
+                                    show_folder_browser = False
+                                    selected_system_to_add = None
+                                    draw_loading_message("Nintendo Switch keys path updated!")
+                                    pygame.time.wait(1500)
+                                else:
+                                    # Add system with selected folder
+                                    system_name = selected_system_to_add['name']
+                                    # Calculate relative path from ROMs directory
+                                    roms_dir = settings.get("roms_dir", "/userdata/roms")
+                                    
+                                    # Debug: Print the paths
+                                    print(f"Selected folder path: {folder_browser_current_path}")
+                                    print(f"ROMs directory: {roms_dir}")
+                                    
+                                    if folder_browser_current_path.startswith(roms_dir):
+                                        rom_folder = os.path.relpath(folder_browser_current_path, roms_dir)
+                                        # If the selected path is the ROMs directory itself, use a default folder name
+                                        if rom_folder == ".":
+                                            rom_folder = system_name.lower().replace(" ", "_").replace("-", "_")
+                                    else:
+                                        # If not starting with ROMs directory, use the basename of the selected path
+                                        rom_folder = os.path.basename(folder_browser_current_path)
+                                    
+                                    # Ensure we have a valid folder name
+                                    if not rom_folder or rom_folder == ".":
                                         rom_folder = system_name.lower().replace(" ", "_").replace("-", "_")
-                                else:
-                                    # If not starting with ROMs directory, use the basename of the selected path
-                                    rom_folder = os.path.basename(folder_browser_current_path)
-                                
-                                # Ensure we have a valid folder name
-                                if not rom_folder or rom_folder == ".":
-                                    rom_folder = system_name.lower().replace(" ", "_").replace("-", "_")
-                                
-                                print(f"Calculated roms_folder: {rom_folder}")
-                                
-                                system_url = selected_system_to_add['url']
-                                
-                                if add_system_to_added_systems(system_name, rom_folder, system_url):
-                                    draw_loading_message(f"System '{system_name}' added successfully!")
-                                    pygame.time.wait(2000)
-                                else:
-                                    draw_loading_message(f"Failed to add system '{system_name}'")
-                                    pygame.time.wait(2000)
-                                
-                                # Reset state
-                                selected_system_to_add = None
-                                show_folder_browser = False
-                                mode = "systems"
-                                highlighted = 0
+                                    
+                                    print(f"Calculated roms_folder: {rom_folder}")
+                                    
+                                    system_url = selected_system_to_add['url']
+                                    
+                                    if add_system_to_added_systems(system_name, rom_folder, system_url):
+                                        draw_loading_message(f"System '{system_name}' added successfully!")
+                                        pygame.time.wait(2000)
+                                    else:
+                                        draw_loading_message(f"Failed to add system '{system_name}'")
+                                        pygame.time.wait(2000)
+                                    
+                                    # Reset state
+                                    selected_system_to_add = None
+                                    show_folder_browser = False
+                                    mode = "systems"
+                                    highlighted = 0
                             else:
                                 # Select current folder path for ROMs directory setting
                                 settings["roms_dir"] = folder_browser_current_path
@@ -2255,6 +2576,13 @@ try:
                                     folder_browser_current_path = selected_item["path"]
                                     print(f"Navigating to folder: {folder_browser_current_path}")
                                     load_folder_contents(folder_browser_current_path)
+                                elif selected_item["type"] == "keys_file":
+                                    # Select this .keys file for Nintendo Switch
+                                    if selected_system_to_add and selected_system_to_add.get("type") == "switch_keys":
+                                        settings["switch_keys_path"] = selected_item["path"]
+                                        save_settings(settings)
+                                        show_folder_browser = False
+                                        selected_system_to_add = None
                     elif event.key == pygame.K_UP and not show_game_details:
                         # Skip keyboard navigation if joystick is connected (prevents double input)
                         if joystick is not None:
@@ -2496,29 +2824,40 @@ try:
                 elif event.type == pygame.JOYBUTTONDOWN:
                     # Debug controller - capture joystick button presses
                     if settings.get("debug_controller", False):
-                        controller_type = settings.get("controller_type", "generic")
-                        button_mapping = CONTROLLER_MAPPINGS.get(controller_type, CONTROLLER_MAPPINGS["generic"])
-                        button_name = button_mapping.get(event.button, f"Button-{event.button}")
-                        current_pressed_button = f"{controller_type.upper()}: {button_name}"
+                        # Find which action this button maps to
+                        mapped_action = None
+                        print(f"DEBUG: Looking for button {event.button} in mapping: {controller_mapping}")
+                        for action in controller_mapping:
+                            button_info = controller_mapping[action]
+                            print(f"DEBUG: Checking action '{action}' with info: {button_info}")
+                            # Check if this is a regular button mapping (integer)
+                            if isinstance(button_info, int) and button_info == event.button:
+                                mapped_action = action
+                                print(f"DEBUG: Found match! Action: {mapped_action}")
+                                break
+                        
+                        if mapped_action:
+                            current_pressed_button = f"Button {event.button} ({mapped_action})"
+                        else:
+                            current_pressed_button = f"Button {event.button} (unmapped)"
                         last_button_time = pygame.time.get_ticks()
                     
                     # Debug: Show all button presses
                     print(f"Joystick button pressed: {event.button}")
                     
-                    # Handle Odin-specific directional buttons (11=up, 14=right, 12=down, 13=left)
-                    controller_type = settings.get("controller_type", "rg35xx")
-                    if controller_type == "odin" and event.button in [11, 12, 13, 14]:
-                        # Convert Odin directional buttons to D-pad-like navigation
-                        if event.button == 11:  # Up
-                            hat = (0, 1)
-                        elif event.button == 12:  # Down
-                            hat = (0, -1)
-                        elif event.button == 13:  # Left
-                            hat = (0, -1)
-                        elif event.button == 14:  # Right
-                            hat = (1, 0)
-                        
-                        # Process as D-pad navigation
+                    # Handle directional button inputs mapped as D-pad
+                    hat = None
+                    if input_matches_action(event, "up"):
+                        hat = (0, 1)
+                    elif input_matches_action(event, "down"):
+                        hat = (0, -1)
+                    elif input_matches_action(event, "left"):
+                        hat = (-1, 0)
+                    elif input_matches_action(event, "right"):
+                        hat = (1, 0)
+                    
+                    # Process as D-pad navigation if we matched a directional input
+                    if hat is not None:
                         movement_occurred = False
                         
                         if hat[1] != 0 and not show_game_details:  # Up or Down
@@ -2621,15 +2960,9 @@ try:
                         # Skip regular button processing for Odin directional buttons
                         continue
                     
-                    # Controller-aware button mapping
-                    select_button = get_controller_button("select")
-                    back_button = get_controller_button("back")
-                    start_button = get_controller_button("start")
-                    detail_button = get_controller_button("detail")
-                    left_shoulder_button = get_controller_button("left_shoulder")
-                    right_shoulder_button = get_controller_button("right_shoulder")
+                    # Note: Using input_matches_action() for dynamic button mapping
                     
-                    if event.button == select_button:  # Select
+                    if input_matches_action(event, "select"):  # Select
                         if show_folder_name_input:
                             # Add selected character to folder name
                             chars = list("abcdefghijklmnopqrstuvwxyz0123456789")
@@ -2647,6 +2980,13 @@ try:
                                     folder_browser_current_path = selected_item["path"]
                                     print(f"Navigating to folder: {folder_browser_current_path}")
                                     load_folder_contents(folder_browser_current_path)
+                                elif selected_item["type"] == "keys_file":
+                                    # Select this .keys file for Nintendo Switch
+                                    if selected_system_to_add and selected_system_to_add.get("type") == "switch_keys":
+                                        settings["switch_keys_path"] = selected_item["path"]
+                                        save_settings(settings)
+                                        show_folder_browser = False
+                                        selected_system_to_add = None
                         elif mode == "systems":
                             regular_systems = [d for d in data if not d.get('list_systems', False)]
                             systems_count = len(regular_systems)
@@ -2695,34 +3035,23 @@ try:
                             elif highlighted == 6:  # Debug Controller
                                 settings["debug_controller"] = not settings["debug_controller"]
                                 save_settings(settings)
-                            elif highlighted == 7:  # Controller Type
-                                controller_types = ["generic", "xbox", "playstation", "nintendo", "rg35xx"]
-                                current_type = settings["controller_type"]
-                                try:
-                                    current_index = controller_types.index(current_type)
-                                    settings["controller_type"] = controller_types[(current_index + 1) % len(controller_types)]
-                                except ValueError:
-                                    settings["controller_type"] = controller_types[0]
-                                save_settings(settings)
-                            elif highlighted == 8:  # Work Directory
-                                # Cycle between common work directories for retro gaming systems
-                                current_work = settings["work_dir"]
-                                work_options = [
-                                    "/userdata/downloads",        # Batocera
-                                    "/userdata/system/downloads", # Batocera alternative
-                                    "/storage/downloads",         # Knulli
-                                    "/opt/system/downloads",      # muOS
-                                    "/tmp/downloads",             # General Linux temp
-                                    "/media/downloads",           # External storage
-                                    os.path.join(SCRIPT_DIR, "py_downloads")  # Script directory
-                                ]
-                                try:
-                                    current_index = work_options.index(current_work)
-                                    settings["work_dir"] = work_options[(current_index + 1) % len(work_options)]
-                                except ValueError:
-                                    settings["work_dir"] = work_options[0]
-                                save_settings(settings)
-                            elif highlighted == 9:  # ROMs Directory  
+                            elif highlighted == 7:  # Work Directory
+                                # Open folder browser for work directory selection
+                                show_folder_browser = True
+                                # Use current work_dir or fallback to a sensible default
+                                current_work = settings.get("work_dir", "")
+                                if not current_work or not os.path.exists(os.path.dirname(current_work)):
+                                    # Use a fallback based on environment
+                                    if os.path.exists("/userdata") and os.access("/userdata", os.R_OK):
+                                        folder_browser_current_path = "/userdata"
+                                    else:
+                                        folder_browser_current_path = os.path.expanduser("~")  # Home directory
+                                else:
+                                    folder_browser_current_path = current_work
+                                load_folder_contents(folder_browser_current_path)
+                                # Set a flag to indicate we're selecting work directory
+                                selected_system_to_add = {"name": "Work Directory", "type": "work_dir"}
+                            elif highlighted == 8:  # ROMs Directory  
                                 # Open folder browser
                                 show_folder_browser = True
                                 # Use current roms_dir or fallback to a sensible default
@@ -2736,6 +3065,26 @@ try:
                                 else:
                                     folder_browser_current_path = current_roms
                                 load_folder_contents(folder_browser_current_path)
+                            elif highlighted == 9:  # Nintendo Switch Keys
+                                # Open folder browser for .keys files
+                                show_folder_browser = True
+                                # Use current keys path or default to home directory
+                                current_keys = settings.get("switch_keys_path", "")
+                                if current_keys and os.path.exists(os.path.dirname(current_keys)):
+                                    folder_browser_current_path = os.path.dirname(current_keys)
+                                else:
+                                    # Default to ~/.switch directory or home
+                                    switch_dir = os.path.expanduser("~/.switch")
+                                    if os.path.exists(switch_dir):
+                                        folder_browser_current_path = switch_dir
+                                    else:
+                                        folder_browser_current_path = os.path.expanduser("~")
+                                load_folder_contents(folder_browser_current_path)
+                                # Set a flag to indicate we're selecting Nintendo Switch keys
+                                selected_system_to_add = {"name": "Nintendo Switch Keys", "type": "switch_keys"}
+                            elif highlighted == 10:  # Remap Controller
+                                # Trigger controller remapping
+                                show_controller_mapping = True
                         elif mode == "add_systems":
                             # Handle add systems selection
                             if available_systems and add_systems_highlighted < len(available_systems):
@@ -2750,45 +3099,60 @@ try:
                                 selected_games.remove(highlighted)
                             else:
                                 selected_games.add(highlighted)
-                    elif event.button == detail_button:  # Detail view / Select folder
+                    elif input_matches_action(event, "detail"):  # Detail view / Select folder
                         if show_folder_browser:
                             print(f"Detail button pressed - Current folder: {folder_browser_current_path}")
                             if selected_system_to_add is not None:
-                                # Add system with selected folder
-                                system_name = selected_system_to_add['name']
-                                # Calculate relative path from ROMs directory
-                                roms_dir = settings.get("roms_dir", "/userdata/roms")
-                                
-                                # Debug: Print the paths
-                                print(f"Selected folder path: {folder_browser_current_path}")
-                                print(f"ROMs directory: {roms_dir}")
-                                
-                                if folder_browser_current_path.startswith(roms_dir):
-                                    rom_folder = os.path.relpath(folder_browser_current_path, roms_dir)
-                                    # If the selected path is the ROMs directory itself, use a default folder name
-                                    if rom_folder == ".":
+                                if selected_system_to_add.get("type") == "work_dir":
+                                    # Set work directory
+                                    settings["work_dir"] = folder_browser_current_path
+                                    save_settings(settings)
+                                    show_folder_browser = False
+                                    selected_system_to_add = None
+                                elif selected_system_to_add.get("type") == "switch_keys":
+                                    # Set Nintendo Switch keys path (for folder selection, not file)
+                                    settings["switch_keys_path"] = folder_browser_current_path
+                                    save_settings(settings)
+                                    show_folder_browser = False
+                                    selected_system_to_add = None
+                                    draw_loading_message("Nintendo Switch keys path updated!")
+                                    pygame.time.wait(1500)
+                                else:
+                                    # Add system with selected folder
+                                    system_name = selected_system_to_add['name']
+                                    # Calculate relative path from ROMs directory
+                                    roms_dir = settings.get("roms_dir", "/userdata/roms")
+                                    
+                                    # Debug: Print the paths
+                                    print(f"Selected folder path: {folder_browser_current_path}")
+                                    print(f"ROMs directory: {roms_dir}")
+                                    
+                                    if folder_browser_current_path.startswith(roms_dir):
+                                        rom_folder = os.path.relpath(folder_browser_current_path, roms_dir)
+                                        # If the selected path is the ROMs directory itself, use a default folder name
+                                        if rom_folder == ".":
+                                            rom_folder = system_name.lower().replace(" ", "_").replace("-", "_")
+                                    else:
+                                        # If not starting with ROMs directory, use the basename of the selected path
+                                        rom_folder = os.path.basename(folder_browser_current_path)
+                                    
+                                    # Ensure we have a valid folder name
+                                    if not rom_folder or rom_folder == ".":
                                         rom_folder = system_name.lower().replace(" ", "_").replace("-", "_")
-                                else:
-                                    # If not starting with ROMs directory, use the basename of the selected path
-                                    rom_folder = os.path.basename(folder_browser_current_path)
-                                
-                                # Ensure we have a valid folder name
-                                if not rom_folder or rom_folder == ".":
-                                    rom_folder = system_name.lower().replace(" ", "_").replace("-", "_")
-                                
-                                print(f"Calculated roms_folder: {rom_folder}")
-                                
-                                system_url = selected_system_to_add['url']
-                                
-                                if add_system_to_added_systems(system_name, rom_folder, system_url):
-                                    draw_loading_message(f"System '{system_name}' added successfully!")
-                                    pygame.time.wait(2000)
-                                else:
-                                    draw_loading_message(f"Failed to add system '{system_name}'")
-                                    pygame.time.wait(2000)
-                                
-                                # Reset state
-                                selected_system_to_add = None
+                                    
+                                    print(f"Calculated roms_folder: {rom_folder}")
+                                    
+                                    system_url = selected_system_to_add['url']
+                                    
+                                    if add_system_to_added_systems(system_name, rom_folder, system_url):
+                                        draw_loading_message(f"System '{system_name}' added successfully!")
+                                        pygame.time.wait(2000)
+                                    else:
+                                        draw_loading_message(f"Failed to add system '{system_name}'")
+                                        pygame.time.wait(2000)
+                                    
+                                    # Reset state
+                                    selected_system_to_add = None
                                 show_folder_browser = False
                                 mode = "systems"
                                 highlighted = 0
@@ -2805,7 +3169,7 @@ try:
                             # Show details modal for current game
                             current_game_detail = game_list[highlighted]
                             show_game_details = True
-                    elif event.button == back_button:  # Back
+                    elif input_matches_action(event, "back"):  # Back
                         if show_folder_browser:
                             # Close folder browser
                             show_folder_browser = False
@@ -2825,14 +3189,14 @@ try:
                         elif mode == "add_systems":
                             mode = "systems"
                             highlighted = 0
-                    elif event.button == left_shoulder_button:  # Left shoulder - Previous page
+                    elif input_matches_action(event, "left_shoulder"):  # Left shoulder - Previous page
                         if mode == "games" and data[selected_system].get('supports_pagination', False):
                             if current_page > 0:
                                 current_page -= 1
                                 game_list = list_files(selected_system, current_page)
                                 highlighted = 0
                                 selected_games = set()
-                    elif event.button == right_shoulder_button:  # Right shoulder - Next page
+                    elif input_matches_action(event, "right_shoulder"):  # Right shoulder - Next page
                         if mode == "games" and data[selected_system].get('supports_pagination', False):
                             current_page += 1
                             new_games = list_files(selected_system, current_page)
@@ -2842,7 +3206,7 @@ try:
                                 selected_games = set()
                             else:
                                 current_page -= 1  # Revert if no games found
-                    elif event.button == start_button:  # Start Download
+                    elif input_matches_action(event, "start"):  # Start Download
                         if mode == "games" and selected_games:
                             draw_loading_message("Starting download...")
                             download_files(selected_system, selected_games)
@@ -2856,14 +3220,35 @@ try:
                     
                     # Debug controller - capture D-pad movement
                     if settings.get("debug_controller", False) and hat != (0, 0):
-                        controller_type = settings.get("controller_type", "generic")
+                        # Find which action this D-pad direction maps to
+                        mapped_action = None
+                        print(f"DEBUG D-PAD: Looking for hat {hat} in mapping: {controller_mapping}")
+                        for action in controller_mapping:
+                            action_info = controller_mapping[action]
+                            print(f"DEBUG D-PAD: Checking action '{action}' with info: {action_info}")
+                            if ((isinstance(action_info, tuple) or isinstance(action_info, list)) and 
+                                len(action_info) >= 3 and
+                                action_info[0] == "hat" and 
+                                tuple(action_info[1:]) == hat):
+                                mapped_action = action
+                                print(f"DEBUG D-PAD: Found match! Action: {mapped_action}")
+                                break
+                            elif isinstance(action_info, tuple):
+                                print(f"DEBUG D-PAD: Tuple comparison - Expected: {hat}, Got: {action_info[1:]}")
+                            else:
+                                print(f"DEBUG D-PAD: Not a tuple: {action_info}")
+                        
                         direction = ""
                         if hat[1] == 1: direction = "Up"
                         elif hat[1] == -1: direction = "Down"
                         elif hat[0] == -1: direction = "Left"
                         elif hat[0] == 1: direction = "Right"
                         else: direction = f"{hat}"
-                        current_pressed_button = f"{controller_type.upper()}: D-Pad {direction}"
+                        
+                        if mapped_action:
+                            current_pressed_button = f"D-Pad {direction} ({mapped_action})"
+                        else:
+                            current_pressed_button = f"D-Pad {direction} (unmapped)"
                         last_button_time = pygame.time.get_ticks()
                     
                     # Only process if D-pad state actually changed

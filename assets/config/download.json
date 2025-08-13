@@ -256,6 +256,7 @@
     "usa_regex": "(USA)",
     "should_filter_usa": false,
     "should_unzip": true,
+    "should_decompress_nsz": true,
     "use_api": true,
     "supports_pagination": true
   },
