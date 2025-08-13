@@ -118,6 +118,14 @@ try:
     # Settings scroll variables
     settings_scroll_offset = 0
     
+    # Search functionality variables
+    search_mode = False
+    search_query = ""
+    filtered_game_list = []
+    char_selector_mode = False
+    char_x = 0
+    char_y = 0
+    
     # Settings will be loaded after functions are defined
     settings = {}
     
@@ -1611,7 +1619,7 @@ try:
             is_highlighted = actual_idx == folder_browser_highlighted
             
             item_y = list_y + i * row_height
-            color = PRIMARY if is_highlighted else TEXT_PRIMARY
+            color = PRIMARY if is_highlighted else BLACK
             
             # Prefix based on type
             if item["type"] == "parent":
@@ -1729,6 +1737,104 @@ try:
         
         if not show_game_details:
             pygame.display.flip()
+
+    def draw_character_selector():
+        """Draw the character selector for search input"""
+        screen.fill(BACKGROUND)
+        
+        # Create centered layout
+        screen_width, screen_height = screen.get_size()
+        center_x = screen_width // 2
+        center_y = screen_height // 2
+        
+        # Character grid layout
+        chars = [
+            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
+            ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'],
+            ['U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3'],
+            ['4', '5', '6', '7', '8', '9', ' ', 'DEL', 'CLEAR', 'DONE']
+        ]
+        
+        # Draw title card
+        title_card_height = 80
+        title_y = 20
+        card_rect = pygame.Rect(20, title_y, screen_width - 40, title_card_height)
+        pygame.draw.rect(screen, SURFACE, card_rect, border_radius=8)
+        pygame.draw.rect(screen, PRIMARY, card_rect, 2, border_radius=8)
+        
+        # Draw title
+        title_font = pygame.font.Font(None, int(FONT_SIZE * 1.2))
+        title_surf = title_font.render("Search Games", True, TEXT_PRIMARY)
+        title_x = center_x - title_surf.get_width() // 2
+        screen.blit(title_surf, (title_x, title_y + 10))
+        
+        # Draw current search query
+        query_display = f"Search: {search_query}_" if len(search_query) < 30 else f"Search: {search_query[-27:]}..."
+        query_surf = font.render(query_display, True, TEXT_SECONDARY)
+        query_x = center_x - query_surf.get_width() // 2
+        screen.blit(query_surf, (query_x, title_y + 45))
+        
+        # Character grid
+        grid_start_y = title_y + title_card_height + 20
+        cell_width = 45
+        cell_height = 40
+        grid_width = len(chars[0]) * cell_width
+        grid_x = center_x - grid_width // 2
+        
+        for row_idx, row in enumerate(chars):
+            for col_idx, char in enumerate(row):
+                x = grid_x + col_idx * cell_width
+                y = grid_start_y + row_idx * cell_height
+                
+                # Highlight selected character
+                is_selected = (char_x == col_idx and char_y == row_idx)
+                
+                # Draw character cell
+                cell_rect = pygame.Rect(x, y, cell_width - 2, cell_height - 2)
+                if is_selected:
+                    pygame.draw.rect(screen, PRIMARY, cell_rect, border_radius=6)
+                    text_color = BACKGROUND
+                else:
+                    pygame.draw.rect(screen, SURFACE, cell_rect, border_radius=6)
+                    pygame.draw.rect(screen, TEXT_DISABLED, cell_rect, 1, border_radius=6)
+                    text_color = TEXT_PRIMARY
+                
+                # Draw character text
+                char_font = pygame.font.Font(None, FONT_SIZE - 4) if len(char) > 1 else font
+                char_surf = char_font.render(char, True, text_color)
+                char_x_pos = x + (cell_width - char_surf.get_width()) // 2
+                char_y_pos = y + (cell_height - char_surf.get_height()) // 2
+                screen.blit(char_surf, (char_x_pos, char_y_pos))
+        
+        # Draw instructions
+        instructions = [
+            "Use D-pad to navigate, A button to select character",
+            f"Press {get_button_name('back')} to cancel search"
+        ]
+        
+        inst_y = grid_start_y + len(chars) * cell_height + 20
+        for instruction in instructions:
+            inst_surf = font.render(instruction, True, TEXT_DISABLED)
+            inst_x = center_x - inst_surf.get_width() // 2
+            screen.blit(inst_surf, (inst_x, inst_y))
+            inst_y += FONT_SIZE + 8
+        
+        pygame.display.flip()
+
+    def filter_games_by_search(games, query):
+        """Filter games list based on search query"""
+        if not query.strip():
+            return games
+        
+        query_lower = query.lower()
+        filtered = []
+        
+        for game in games:
+            game_name = game.get('name', '').lower()
+            if query_lower in game_name:
+                filtered.append(game)
+        
+        return filtered
 
     def download_files(system, selected_game_indices):
         try:
@@ -1862,6 +1968,14 @@ try:
                     # Handle NSZ decompression for Nintendo Switch games
                     elif filename.endswith(".nsz"):
                         draw_progress_bar(f"Checking NSZ support for {filename}...", 0)
+                        
+                        # Check if NSZ package is available
+                        if not nsz_available:
+                            draw_progress_bar(f"NSZ decompression skipped - NSZ package not available", 0)
+                            log_error(f"NSZ decompression skipped for {filename}: NSZ package not available. Please install it manually: pip install nsz")
+                            pygame.time.wait(2000)
+                            continue
+                        
                         try:
                             import subprocess
                             import shutil
@@ -2342,6 +2456,62 @@ try:
     # Load settings after all functions are defined
     settings = load_settings()
     
+    # Check and install NSZ package if needed
+    def check_and_install_nsz():
+        """Check if NSZ package is installed and install it if needed"""
+        try:
+            import nsz
+            print("NSZ package is already installed")
+            
+            # Also check if nsz command is available
+            try:
+                import subprocess
+                result = subprocess.run(['nsz', '--version'], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    print("NSZ command-line tool is available")
+                    return True
+                else:
+                    print("NSZ package installed but command-line tool not working")
+                    return False
+            except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
+                print("NSZ package installed but command-line tool not available")
+                return False
+                
+        except ImportError:
+            print("NSZ package not found. Attempting to install...")
+            try:
+                import subprocess
+                import sys
+                
+                # Use pip to install nsz
+                result = subprocess.run([sys.executable, "-m", "pip", "install", "nsz"], 
+                                      capture_output=True, text=True, check=True)
+                print("NSZ package installed successfully")
+                
+                # Verify the command is now available
+                try:
+                    result = subprocess.run(['nsz', '--version'], capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0:
+                        print("NSZ command-line tool is now available")
+                        return True
+                    else:
+                        print("NSZ package installed but command-line tool not working")
+                        return False
+                except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
+                    print("NSZ package installed but command-line tool not available")
+                    return False
+                    
+            except subprocess.CalledProcessError as e:
+                print(f"Failed to install NSZ package: {e}")
+                print("You may need to install it manually: pip install nsz")
+                return False
+            except Exception as e:
+                print(f"Error checking/installing NSZ package: {e}")
+                return False
+    
+    # Check NSZ package on startup
+    nsz_available = check_and_install_nsz()
+    
     # Load or create controller mapping
     mapping_exists = load_controller_mapping()
     
@@ -2455,7 +2625,8 @@ try:
                 "down": "Down arrow",
                 "left": "Left arrow", 
                 "right": "Right arrow",
-                "start": "Space key"
+                "start": "Space key",
+                "search": "S key"
             }
             return keyboard_names.get(action.lower(), action.upper())
         
@@ -2484,7 +2655,7 @@ try:
         button_names = {
             0: "A button",      # Usually the primary action button
             1: "B button",      # Usually the secondary/back button  
-            2: "X button",      # Usually tertiary action
+            2: "X button",      # Usually tertiary action (also search)
             3: "Y button",      # Usually quaternary action
             4: "L1 button",     # Left shoulder button
             5: "R1 button",     # Right shoulder button
