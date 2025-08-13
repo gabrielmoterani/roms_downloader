@@ -9,6 +9,7 @@ from zipfile import ZipFile
 from io import BytesIO
 from datetime import datetime
 from urllib.parse import urljoin, unquote, quote
+import html
 from threading import Thread
 from queue import Queue
 
@@ -151,16 +152,14 @@ try:
     controller_mapping = {}
     settings_list = [
         "Enable Box-art Display",
-        "Enable Image Cache", 
-        "Reset Image Cache",
         "Update from GitHub",
         "View Type",
         "USA Games Only",
-        "Debug Controller",
         "Work Directory",
         "ROMs Directory",
         "Nintendo Switch Keys",
         "Remap Controller",
+        "Add Systems",
         "Systems Settings"
     ]
 
@@ -197,10 +196,8 @@ try:
         
         default_settings = {
             "enable_boxart": True,
-            "cache_enabled": True,
             "view_type": "list",
             "usa_only": False,
-            "debug_controller": False,
             "work_dir": default_work_dir,
             "roms_dir": default_roms_dir,
             "switch_keys_path": ""
@@ -456,7 +453,35 @@ try:
         if not settings["enable_boxart"]:
             return None
         
-        # Handle Switch API format with direct image URLs
+        # Handle Nintendo Switch boxart with title ID extraction and pre-loaded API data
+        game_name = game_item if isinstance(game_item, str) else game_item.get('name', '')
+        
+        # Check if this is Nintendo Switch and boxart_url contains the API URL
+        if boxart_url and "api.ultranx.ru" in boxart_url:
+            title_id = extract_switch_title_id(game_name)
+            if title_id and boxart_url in switch_api_cache:
+                # Use pre-loaded Switch API data for boxart
+                cache_key = f"switch_{title_id}"
+                
+                # Return cached image if available
+                if settings["cache_enabled"] and cache_key in image_cache:
+                    return image_cache[cache_key]
+                
+                if not settings["cache_enabled"] and cache_key in image_cache:
+                    return image_cache[cache_key]
+                
+                # Start loading from pre-loaded Switch API data if not already in cache
+                if cache_key not in image_cache:
+                    image_cache[cache_key] = "loading"
+                    api_data = switch_api_cache[boxart_url]
+                    thread = Thread(target=load_switch_boxart_from_cache, args=(title_id, cache_key, api_data))
+                    thread.daemon = True
+                    thread.start()
+                
+                return None  # Not ready yet
+            # If no title ID found or API not cached, fall back to regular handling
+        
+        # Handle Switch API format with direct image URLs (legacy support)
         if isinstance(game_item, dict) and 'banner_url' in game_item and game_item['banner_url']:
             # Switch API format - use direct banner URL (JPG format)
             image_url = game_item['banner_url']
@@ -502,6 +527,160 @@ try:
                 thread.start()
         
         return None  # Not ready yet
+
+    def load_switch_boxart_from_cache(title_id, cache_key, api_data):
+        """Load Nintendo Switch boxart using pre-loaded API data"""
+        try:
+            # Look for the specific title ID in the pre-loaded API data
+            if title_id in api_data:
+                game_data = api_data[title_id]
+                banner_url = game_data.get('banner_url')
+                icon_url = game_data.get('icon_url')
+                
+                # Try banner first, then icon
+                image_url = banner_url or icon_url
+                
+                if image_url:
+                    # Load the image
+                    image_response = requests.get(image_url, timeout=10)
+                    image_response.raise_for_status()
+                    
+                    # Load image from bytes
+                    image_data = BytesIO(image_response.content)
+                    image = pygame.image.load(image_data)
+                    
+                    # Scale to thumbnail size
+                    scaled_image = pygame.transform.scale(image, THUMBNAIL_SIZE)
+                    
+                    # Add to queue for main thread to process
+                    image_queue.put((cache_key, scaled_image))
+                    return
+            
+            # If title ID not found in API data, create placeholder
+            game_name = f"Switch Game {title_id[:8]}"  # Use first 8 chars of title ID
+            initials = get_game_initials(game_name)
+            placeholder_url = f"https://placehold.co/50x50?text={initials}"
+            
+            try:
+                response = requests.get(placeholder_url, timeout=5)
+                response.raise_for_status()
+                
+                image_data = BytesIO(response.content)
+                image = pygame.image.load(image_data)
+                scaled_image = pygame.transform.scale(image, THUMBNAIL_SIZE)
+                
+                image_queue.put((cache_key, scaled_image))
+            except:
+                # If placeholder fails, create simple colored rectangle
+                placeholder_surface = pygame.Surface(THUMBNAIL_SIZE)
+                placeholder_surface.fill((64, 128, 255))  # Blue color for Switch
+                
+                # Add title ID text if possible
+                try:
+                    font_obj = pygame.font.Font(None, 12)
+                    text = font_obj.render(title_id[:8], True, (255, 255, 255))
+                    text_rect = text.get_rect(center=(THUMBNAIL_SIZE[0]//2, THUMBNAIL_SIZE[1]//2))
+                    placeholder_surface.blit(text, text_rect)
+                except:
+                    pass
+                
+                image_queue.put((cache_key, placeholder_surface))
+            
+        except Exception as e:
+            # On error, create a simple colored placeholder
+            try:
+                placeholder_surface = pygame.Surface(THUMBNAIL_SIZE)
+                placeholder_surface.fill((64, 128, 255))  # Blue color for Switch
+                
+                # Add title ID text if possible
+                try:
+                    font_obj = pygame.font.Font(None, 12)
+                    text = font_obj.render(title_id[:8], True, (255, 255, 255))
+                    text_rect = text.get_rect(center=(THUMBNAIL_SIZE[0]//2, THUMBNAIL_SIZE[1]//2))
+                    placeholder_surface.blit(text, text_rect)
+                except:
+                    pass
+                
+                image_queue.put((cache_key, placeholder_surface))
+            except:
+                # Complete fallback - mark as failed
+                image_queue.put((cache_key, None))
+
+    def load_switch_boxart(title_id, cache_key, api_url):
+        """Load Nintendo Switch boxart using title ID and ultranx API"""
+        global switch_api_cache
+        
+        try:
+            # Check if we already have the API data cached
+            if api_url not in switch_api_cache:
+                # Fetch the full API data
+                response = requests.get(api_url, timeout=10)
+                response.raise_for_status()
+                api_data = response.json()
+                switch_api_cache[api_url] = api_data
+            else:
+                api_data = switch_api_cache[api_url]
+            
+            # Look for the specific title ID in the API data
+            if title_id in api_data:
+                game_data = api_data[title_id]
+                banner_url = game_data.get('banner_url')
+                icon_url = game_data.get('icon_url')
+                
+                # Try banner first, then icon
+                image_url = banner_url or icon_url
+                
+                if image_url:
+                    # Load the image
+                    image_response = requests.get(image_url, timeout=10)
+                    image_response.raise_for_status()
+                    
+                    # Load image from bytes
+                    image_data = BytesIO(image_response.content)
+                    image = pygame.image.load(image_data)
+                    
+                    # Scale to thumbnail size
+                    scaled_image = pygame.transform.scale(image, THUMBNAIL_SIZE)
+                    
+                    # Add to queue for main thread to process
+                    image_queue.put((cache_key, scaled_image))
+                    return
+            
+            # If title ID not found or no image URL, create placeholder
+            game_name = f"Switch Game {title_id[:8]}"  # Use first 8 chars of title ID
+            initials = get_game_initials(game_name)
+            placeholder_url = f"https://placehold.co/50x50?text={initials}"
+            
+            response = requests.get(placeholder_url, timeout=5)
+            response.raise_for_status()
+            
+            image_data = BytesIO(response.content)
+            image = pygame.image.load(image_data)
+            scaled_image = pygame.transform.scale(image, THUMBNAIL_SIZE)
+            
+            image_queue.put((cache_key, scaled_image))
+            
+        except Exception as e:
+            # On error, mark as failed and optionally create a simple colored placeholder
+            try:
+                # Create a simple colored rectangle as fallback
+                placeholder_surface = pygame.Surface(THUMBNAIL_SIZE)
+                placeholder_surface.fill((64, 128, 255))  # Blue color for Switch
+                
+                # Add title ID text if possible
+                try:
+                    import pygame.font
+                    font = pygame.font.Font(None, 12)
+                    text = font.render(title_id[:8], True, (255, 255, 255))
+                    text_rect = text.get_rect(center=(THUMBNAIL_SIZE[0]//2, THUMBNAIL_SIZE[1]//2))
+                    placeholder_surface.blit(text, text_rect)
+                except:
+                    pass
+                
+                image_queue.put((cache_key, placeholder_surface))
+            except:
+                # Complete fallback - mark as failed
+                image_queue.put((cache_key, None))
 
     def load_image_with_fallback(base_url, base_name, formats, cache_key, game_name=None):
         """Try loading image with different format extensions"""
@@ -794,38 +973,34 @@ try:
             setting_value = ""
             if actual_idx == 0:  # Enable Box-art Display
                 setting_value = "ON" if settings["enable_boxart"] else "OFF"
-            elif actual_idx == 1:  # Enable Image Cache
-                setting_value = "ON" if settings["cache_enabled"] else "OFF"
-            elif actual_idx == 2:  # Reset Image Cache
-                select_button_name = get_button_name("select")
-                setting_value = f"Press {select_button_name} to reset"
-            elif actual_idx == 3:  # Update from GitHub
+            elif actual_idx == 1:  # Update from GitHub
                 select_button_name = get_button_name("select")
                 setting_value = f"Press {select_button_name} to update"
-            elif actual_idx == 4:  # View Type
+            elif actual_idx == 2:  # View Type
                 setting_value = settings["view_type"].upper()
-            elif actual_idx == 5:  # USA Games Only
+            elif actual_idx == 3:  # USA Games Only
                 setting_value = "ON" if settings["usa_only"] else "OFF"
-            elif actual_idx == 6:  # Debug Controller
-                setting_value = "ON" if settings["debug_controller"] else "OFF"
-            elif actual_idx == 7:  # Work Directory
+            elif actual_idx == 4:  # Work Directory
                 work_dir = settings.get("work_dir", "")
                 setting_value = work_dir[-30:] + "..." if len(work_dir) > 30 else work_dir
-            elif actual_idx == 8:  # ROMs Directory
+            elif actual_idx == 5:  # ROMs Directory
                 roms_dir = settings.get("roms_dir", "")
                 setting_value = roms_dir[-30:] + "..." if len(roms_dir) > 30 else roms_dir
-            elif actual_idx == 9:  # Nintendo Switch Keys
+            elif actual_idx == 6:  # Nintendo Switch Keys
                 keys_path = settings.get("switch_keys_path", "")
                 if keys_path and os.path.exists(keys_path):
                     setting_value = keys_path[-30:] + "..." if len(keys_path) > 30 else keys_path
                 else:
                     setting_value = "Not configured"
-            elif actual_idx == 10:  # Remap Controller
+            elif actual_idx == 7:  # Remap Controller
                 if controller_mapping:
                     setting_value = f"{len(controller_mapping)} buttons mapped"
                 else:
                     setting_value = "Not configured"
-            elif actual_idx == 11:  # Systems Settings
+            elif actual_idx == 8:  # Add Systems
+                select_button_name = get_button_name("select")
+                setting_value = f"Press {select_button_name} to add"
+            elif actual_idx == 9:  # Systems Settings
                 select_button_name = get_button_name("select")
                 setting_value = f"Press {select_button_name} to configure"
             
@@ -835,8 +1010,6 @@ try:
             y += row_height
         
         
-        # Draw debug controller info
-        draw_debug_controller()
 
     def draw_add_systems_menu():
         screen.fill(BACKGROUND)
@@ -897,8 +1070,6 @@ try:
                     down_arrow = font.render("↓", True, GRAY)
                     screen.blit(down_arrow, (screen_width - 30, screen_height - 30))
         
-        # Draw debug controller info
-        draw_debug_controller()
 
     def draw_systems_settings_menu():
         """Draw the systems settings menu that lists all systems"""
@@ -972,8 +1143,6 @@ try:
                 down_arrow = font.render("↓", True, GRAY)
                 screen.blit(down_arrow, (screen_width - 30, screen_height - 30))
         
-        # Draw debug controller info
-        draw_debug_controller()
 
     def draw_system_settings_menu():
         """Draw the individual system settings menu"""
@@ -1034,8 +1203,6 @@ try:
             screen.blit(option_surf, (20, y))
             y += FONT_SIZE + 10
         
-        # Draw debug controller info
-        draw_debug_controller()
 
     def draw_grid_view(title, items, selected_indices):
         screen.fill(BACKGROUND)
@@ -1223,8 +1390,6 @@ try:
             
             screen.blit(message_surf, (20, message_y))
         
-        # Draw debug controller info
-        draw_debug_controller()
         
         if not show_game_details:
             pygame.display.flip()
@@ -1262,6 +1427,15 @@ try:
             
             screen.blit(inst_surf, (20, y))
             y += inst_height + 15
+        
+        # Draw search instruction if in games mode
+        if mode == "games" and not char_selector_mode:
+            search_button_name = get_button_name("search")
+            search_instruction = f"Press {search_button_name} to search games"
+            
+            inst_surf = font.render(search_instruction, True, TEXT_DISABLED)
+            screen.blit(inst_surf, (20, y))
+            y += FONT_SIZE + 8
         
         y += 10  # Add some space after instructions
         
@@ -1388,8 +1562,6 @@ try:
             page_y = screen_height - 20 if not selected_games else screen_height - 65
             screen.blit(page_surf, (20, page_y))
 
-        # Draw debug controller info
-        draw_debug_controller()
 
         if not show_game_details:
             pygame.display.flip()
@@ -1671,28 +1843,6 @@ try:
             item_surf = font.render(display_name, True, color)
             screen.blit(item_surf, (title_x, item_y))
 
-    def draw_debug_controller():
-        """Draw the current pressed button at the bottom of the screen if debug mode is enabled"""
-        if not settings.get("debug_controller", False):
-            return
-        
-        current_time = pygame.time.get_ticks()
-        if current_time - last_button_time < BUTTON_DISPLAY_TIME and current_pressed_button:
-            screen_width, screen_height = screen.get_size()
-            debug_text = f"Button: {current_pressed_button}"
-            debug_surf = font.render(debug_text, True, TEXT_PRIMARY)
-            debug_x = screen_width - debug_surf.get_width() - 20
-            debug_y = screen_height - 30
-            
-            # Draw background rectangle
-            padding = 5
-            debug_rect = pygame.Rect(debug_x - padding, debug_y - padding, 
-                                   debug_surf.get_width() + 2 * padding, 
-                                   debug_surf.get_height() + 2 * padding)
-            pygame.draw.rect(screen, WHITE, debug_rect)
-            pygame.draw.rect(screen, BLACK, debug_rect, 1)
-            
-            screen.blit(debug_surf, (debug_x, debug_y))
 
     def draw_loading_message(message):
         screen.fill(BACKGROUND)
@@ -1750,8 +1900,6 @@ try:
             screen.blit(inst_surf, (inst_x, inst_y))
             inst_y += FONT_SIZE + 8
         
-        # Draw debug controller info
-        draw_debug_controller()
         
         if not show_game_details:
             pygame.display.flip()
@@ -1838,6 +1986,43 @@ try:
             inst_y += FONT_SIZE + 8
         
         pygame.display.flip()
+
+    def decode_filename(raw_filename):
+        """Properly decode URL-encoded and HTML entity-encoded filenames"""
+        try:
+            # First decode URL encoding (e.g., %20 -> space, %5B -> [)
+            url_decoded = unquote(raw_filename)
+            
+            # Then decode HTML entities (e.g., &gt; -> >, &amp; -> &)
+            html_decoded = html.unescape(url_decoded)
+            
+            # Handle any remaining character encoding issues
+            # Try to encode as latin1 and decode as utf-8 if needed
+            try:
+                if html_decoded.encode('latin1').decode('utf-8') != html_decoded:
+                    html_decoded = html_decoded.encode('latin1').decode('utf-8')
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                pass  # Keep original if encoding conversion fails
+            
+            return html_decoded
+        except Exception:
+            # If all decoding fails, return the original
+            return raw_filename
+
+    def extract_switch_title_id(game_name):
+        """Extract Nintendo Switch title ID from game name (format: [TITLEID])"""
+        try:
+            # Look for pattern like [01234567890ABCDEF] (16 characters)
+            import re
+            match = re.search(r'\[([0-9A-Fa-f]{16})\]', game_name)
+            if match:
+                return match.group(1).upper()
+            return None
+        except Exception:
+            return None
+
+    # Cache for Switch API data to avoid repeated requests
+    switch_api_cache = {}
 
     def filter_games_by_search(games, query):
         """Filter games list based on search query"""
@@ -2192,6 +2377,21 @@ try:
                 r.raise_for_status()
                 html_content = r.text
                 
+                # Check if this is Nintendo Switch and load boxart API data
+                boxart_api_data = {}
+                if sys_data.get('name') == 'Nintendo Switch' and 'boxarts' in sys_data:
+                    try:
+                        boxart_url = sys_data['boxarts']
+                        draw_loading_message(f"Loading boxart data for {sys_data['name']}...")
+                        api_response = requests.get(boxart_url, timeout=30)
+                        api_response.raise_for_status()
+                        boxart_api_data = api_response.json()
+                        switch_api_cache[boxart_url] = boxart_api_data
+                        print(f"Loaded {len(boxart_api_data)} games from Switch API")
+                    except Exception as e:
+                        log_error(f"Failed to load Switch boxart API: {e}")
+                        print(f"Warning: Could not load Switch boxart data: {e}")
+                
                 # Extract file links using regex
                 if 'regex' in sys_data:
                     # Use the provided named capture group regex
@@ -2201,12 +2401,12 @@ try:
                         try:
                             # Try to get the filename from named groups
                             if 'text' in match.groupdict():
-                                filename = unquote(match.group('text'))
+                                filename = decode_filename(match.group('text'))
                             elif 'href' in match.groupdict():
-                                filename = unquote(match.group('href'))
+                                filename = decode_filename(match.group('href'))
                             else:
                                 # Fallback to first group
-                                filename = unquote(match.group(1))
+                                filename = decode_filename(match.group(1))
                             
                             # Filter by file format
                             if any(filename.lower().endswith(ext.lower()) for ext in formats):
@@ -2218,7 +2418,7 @@ try:
                     matches = re.findall(r'<a href="([^"]+)"[^>]*>([^<]+)</a>', html_content)
                     files = []
                     for href, text in matches:
-                        filename = unquote(text or href)
+                        filename = decode_filename(text or href)
                         if any(filename.lower().endswith(ext.lower()) for ext in formats):
                             files.append(filename)
                 
@@ -2868,14 +3068,18 @@ try:
                 # Get visible systems and add Settings/Add Systems options
                 visible_systems = get_visible_systems()
                 regular_systems = [d['name'] for d in visible_systems]
-                systems_with_options = regular_systems + ["Add Systems", "Settings"]
+                systems_with_options = regular_systems + ["Settings"]
                 draw_menu("Select a System", systems_with_options, set())
             elif mode == "games":
-                if game_list:  # Only draw if we have games
+                if char_selector_mode:
+                    draw_character_selector()
+                elif game_list:  # Only draw if we have games
+                    # Use filtered list if in search mode
+                    current_game_list = filtered_game_list if search_mode and search_query else game_list
                     if settings["view_type"] == "grid":
-                        draw_grid_view("Select Games", game_list, selected_games)
+                        draw_grid_view("Select Games" + (f" (Search: {search_query})" if search_mode and search_query else ""), current_game_list, selected_games)
                     else:
-                        draw_menu("Select Games", game_list, selected_games)
+                        draw_menu("Select Games" + (f" (Search: {search_query})" if search_mode and search_query else ""), current_game_list, selected_games)
                 else:
                     draw_loading_message("No games found for this system")
             elif mode == "settings":
@@ -2907,15 +3111,30 @@ try:
                 if event.type == pygame.QUIT:
                     running = False
                 elif event.type == pygame.KEYDOWN:
-                    # Debug controller - capture keyboard presses
-                    if settings.get("debug_controller", False):
-                        key_names = {
-                            pygame.K_UP: "Up", pygame.K_DOWN: "Down", pygame.K_LEFT: "Left", pygame.K_RIGHT: "Right",
-                            pygame.K_RETURN: "Enter", pygame.K_ESCAPE: "Escape", pygame.K_SPACE: "Space", pygame.K_y: "Y"
-                        }
-                        key_name = key_names.get(event.key, f"Key-{event.key}")
-                        current_pressed_button = f"KEYBOARD: {key_name}"
-                        last_button_time = pygame.time.get_ticks()
+                    # Handle character selector navigation first
+                    if char_selector_mode:
+                        if event.key == pygame.K_UP:
+                            if char_y > 0:
+                                char_y -= 1
+                            continue
+                        elif event.key == pygame.K_DOWN:
+                            if char_y < 3:  # 4 rows (0-3)
+                                char_y += 1
+                            continue
+                        elif event.key == pygame.K_LEFT:
+                            if char_x > 0:
+                                char_x -= 1
+                            continue
+                        elif event.key == pygame.K_RIGHT:
+                            chars = [
+                                ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
+                                ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'],
+                                ['U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3'],
+                                ['4', '5', '6', '7', '8', '9', ' ', 'DEL', 'CLEAR', 'DONE']
+                            ]
+                            if char_y < len(chars) and char_x < len(chars[char_y]) - 1:
+                                char_x += 1
+                            continue
                     
                     # Keyboard controls (same logic as joystick)
                     if event.key == pygame.K_RETURN:  # Enter = Select (Button 4)
@@ -2936,13 +3155,7 @@ try:
                             # Use helper function for consistent filtering
                             visible_systems = get_visible_systems()
                             systems_count = len(visible_systems)
-                            if highlighted == systems_count:  # Add Systems option
-                                mode = "add_systems"
-                                highlighted = 0
-                                add_systems_highlighted = 0
-                                # Load available systems in background
-                                load_available_systems()
-                            elif highlighted == systems_count + 1:  # Settings option
+                            if highlighted == systems_count:  # Settings option
                                 mode = "settings"
                                 highlighted = 0
                                 settings_scroll_offset = 0
@@ -2966,25 +3179,15 @@ try:
                             if highlighted == 0:  # Enable Box-art Display
                                 settings["enable_boxart"] = not settings["enable_boxart"]
                                 save_settings(settings)
-                            elif highlighted == 1:  # Enable Image Cache
-                                settings["cache_enabled"] = not settings["cache_enabled"]
-                                if not settings["cache_enabled"]:
-                                    reset_image_cache()
-                                save_settings(settings)
-                            elif highlighted == 2:  # Reset Image Cache
-                                reset_image_cache()
-                            elif highlighted == 3:  # Update from GitHub
+                            elif highlighted == 1:  # Update from GitHub
                                 update_from_github()
-                            elif highlighted == 4:  # View Type
+                            elif highlighted == 2:  # View Type
                                 settings["view_type"] = "grid" if settings["view_type"] == "list" else "list"
                                 save_settings(settings)
-                            elif highlighted == 5:  # USA Games Only
+                            elif highlighted == 3:  # USA Games Only
                                 settings["usa_only"] = not settings["usa_only"]
                                 save_settings(settings)
-                            elif highlighted == 6:  # Debug Controller
-                                settings["debug_controller"] = not settings["debug_controller"]
-                                save_settings(settings)
-                            elif highlighted == 7:  # Work Directory
+                            elif highlighted == 4:  # Work Directory
                                 # Open folder browser for work directory selection
                                 show_folder_browser = True
                                 # Use current work_dir or fallback to a sensible default
@@ -3000,7 +3203,7 @@ try:
                                 load_folder_contents(folder_browser_current_path)
                                 # Set a flag to indicate we're selecting work directory
                                 selected_system_to_add = {"name": "Work Directory", "type": "work_dir"}
-                            elif highlighted == 8:  # ROMs Directory
+                            elif highlighted == 5:  # ROMs Directory
                                 # Open folder browser
                                 show_folder_browser = True
                                 # Use current roms_dir or fallback to a sensible default
@@ -3014,7 +3217,7 @@ try:
                                 else:
                                     folder_browser_current_path = current_roms
                                 load_folder_contents(folder_browser_current_path)
-                            elif highlighted == 9:  # Nintendo Switch Keys
+                            elif highlighted == 6:  # Nintendo Switch Keys
                                 # Open folder browser for .keys files
                                 show_folder_browser = True
                                 # Use current keys path or default to home directory
@@ -3031,10 +3234,16 @@ try:
                                 load_folder_contents(folder_browser_current_path)
                                 # Set a flag to indicate we're selecting Nintendo Switch keys
                                 selected_system_to_add = {"name": "Nintendo Switch Keys", "type": "switch_keys"}
-                            elif highlighted == 10:  # Remap Controller
+                            elif highlighted == 7:  # Remap Controller
                                 # Trigger controller remapping
                                 show_controller_mapping = True
-                            elif highlighted == 11:  # Systems Settings
+                            elif highlighted == 8:  # Add Systems
+                                mode = "add_systems"
+                                highlighted = 0
+                                add_systems_highlighted = 0
+                                # Load available systems in background
+                                load_available_systems()
+                            elif highlighted == 9:  # Systems Settings
                                 mode = "systems_settings"
                                 systems_settings_highlighted = 0
                                 highlighted = 0
@@ -3163,7 +3372,13 @@ try:
                             current_game_detail = game_list[highlighted]
                             show_game_details = True
                     elif event.key == pygame.K_ESCAPE:  # Escape = Back (Button 3)
-                        if show_folder_browser:
+                        if char_selector_mode:
+                            # Exit character selector and cancel search
+                            char_selector_mode = False
+                            search_mode = False
+                            search_query = ""
+                            filtered_game_list = []
+                        elif show_folder_browser:
                             # Close folder browser
                             show_folder_browser = False
                         elif show_game_details:
@@ -3180,14 +3395,21 @@ try:
                             mode = "systems"
                             highlighted = 0
                         elif mode == "add_systems":
-                            mode = "systems"
-                            highlighted = 0
+                            mode = "settings"
+                            highlighted = 8  # Return to Add Systems option
                         elif mode == "systems_settings":
                             mode = "settings"
                             highlighted = 0
                         elif mode == "system_settings":
                             mode = "systems_settings"
                             highlighted = systems_settings_highlighted
+                    elif event.key == pygame.K_s:  # S key = Search
+                        if mode == "games" and game_list and not char_selector_mode:
+                            # Enter search mode
+                            search_mode = True
+                            char_selector_mode = True
+                            char_x = 0
+                            char_y = 0
                     elif event.key == pygame.K_SPACE:  # Space = Start Download (Button 10)
                         if mode == "games" and selected_games:
                             draw_loading_message("Starting download...")
@@ -3198,7 +3420,40 @@ try:
                             # Finish folder name input
                             create_folder_with_name()
                     elif event.key == pygame.K_RETURN:  # Enter = Select
-                        if show_folder_name_input:
+                        if char_selector_mode:
+                            # Handle character selection
+                            chars = [
+                                ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
+                                ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'],
+                                ['U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3'],
+                                ['4', '5', '6', '7', '8', '9', ' ', 'DEL', 'CLEAR', 'DONE']
+                            ]
+                            if char_y < len(chars) and char_x < len(chars[char_y]):
+                                selected_char = chars[char_y][char_x]
+                                if selected_char == 'DEL':
+                                    # Delete last character
+                                    if search_query:
+                                        search_query = search_query[:-1]
+                                elif selected_char == 'CLEAR':
+                                    # Clear entire search query
+                                    search_query = ""
+                                elif selected_char == 'DONE':
+                                    # Finish search input
+                                    char_selector_mode = False
+                                    if search_query:
+                                        filtered_game_list = filter_games_by_search(game_list, search_query)
+                                        highlighted = 0  # Reset selection to first filtered item
+                                    else:
+                                        search_mode = False
+                                        filtered_game_list = []
+                                else:
+                                    # Add character to search query
+                                    search_query += selected_char
+                                
+                                # Update filtered list in real-time
+                                if search_query:
+                                    filtered_game_list = filter_games_by_search(game_list, search_query)
+                        elif show_folder_name_input:
                             # Add selected character to folder name
                             chars = list("abcdefghijklmnopqrstuvwxyz0123456789")
                             if folder_name_char_index < len(chars):
@@ -3268,7 +3523,7 @@ try:
                                 max_items = 2  # Hide from menu + Custom ROM folder
                             else:  # systems
                                 visible_systems = get_visible_systems()
-                                max_items = len(visible_systems) + 2  # +2 for Add Systems and Settings options
+                                max_items = len(visible_systems) + 1  # +1 for Settings option
                             
                             if max_items > 0:
                                 if mode == "add_systems":
@@ -3326,7 +3581,7 @@ try:
                                 max_items = 2  # Hide from menu + Custom ROM folder
                             else:  # systems
                                 visible_systems = get_visible_systems()
-                                max_items = len(visible_systems) + 2  # +2 for Add Systems and Settings options
+                                max_items = len(visible_systems) + 1  # +1 for Settings option
                             
                             if max_items > 0:
                                 if mode == "add_systems":
@@ -3420,7 +3675,7 @@ try:
                                 max_items = 2  # Hide from menu + Custom ROM folder
                             else:  # systems
                                 visible_systems = get_visible_systems()
-                                max_items = len(visible_systems) + 2  # +2 for Add Systems and Settings options
+                                max_items = len(visible_systems) + 1  # +1 for Settings option
                             
                             if max_items > 0:
                                 if mode == "add_systems":
@@ -3479,7 +3734,7 @@ try:
                                 max_items = 2  # Hide from menu + Custom ROM folder
                             else:  # systems
                                 visible_systems = get_visible_systems()
-                                max_items = len(visible_systems) + 2  # +2 for Add Systems and Settings options
+                                max_items = len(visible_systems) + 1  # +1 for Settings option
                             
                             if max_items > 0:
                                 if mode == "add_systems":
@@ -3525,26 +3780,6 @@ try:
                                 # List navigation: jump to different letter
                                 highlighted = find_next_letter_index(game_list, highlighted, 1)
                 elif event.type == pygame.JOYBUTTONDOWN:
-                    # Debug controller - capture joystick button presses
-                    if settings.get("debug_controller", False):
-                        # Find which action this button maps to
-                        mapped_action = None
-                        print(f"DEBUG: Looking for button {event.button} in mapping: {controller_mapping}")
-                        for action in controller_mapping:
-                            button_info = controller_mapping[action]
-                            print(f"DEBUG: Checking action '{action}' with info: {button_info}")
-                            # Check if this is a regular button mapping (integer)
-                            if isinstance(button_info, int) and button_info == event.button:
-                                mapped_action = action
-                                print(f"DEBUG: Found match! Action: {mapped_action}")
-                                break
-                        
-                        if mapped_action:
-                            current_pressed_button = f"Button {event.button} ({mapped_action})"
-                        else:
-                            current_pressed_button = f"Button {event.button} (unmapped)"
-                        last_button_time = pygame.time.get_ticks()
-                    
                     # Debug: Show all button presses
                     print(f"Joystick button pressed: {event.button}")
                     
@@ -3620,7 +3855,7 @@ try:
                                     max_items = len(available_systems)
                                 else:  # systems
                                     visible_systems = get_visible_systems()
-                                    max_items = len(visible_systems) + 2  # +2 for Add Systems and Settings options
+                                    max_items = len(visible_systems) + 1  # +1 for Settings option
                                 
                                 if max_items > 0:
                                     if mode == "add_systems":
@@ -3732,7 +3967,7 @@ try:
                                     max_items = len(available_systems)
                                 else:  # systems
                                     visible_systems = get_visible_systems()
-                                    max_items = len(visible_systems) + 2  # +2 for Add Systems and Settings options
+                                    max_items = len(visible_systems) + 1  # +1 for Settings option
                                 
                                 if max_items > 0:
                                     if mode == "add_systems":
@@ -3809,13 +4044,7 @@ try:
                             # Use helper function for consistent filtering
                             visible_systems = get_visible_systems()
                             systems_count = len(visible_systems)
-                            if highlighted == systems_count:  # Add Systems option
-                                mode = "add_systems"
-                                highlighted = 0
-                                add_systems_highlighted = 0
-                                # Load available systems in background
-                                load_available_systems()
-                            elif highlighted == systems_count + 1:  # Settings option
+                            if highlighted == systems_count:  # Settings option
                                 mode = "settings"
                                 highlighted = 0
                                 settings_scroll_offset = 0
@@ -3839,25 +4068,15 @@ try:
                             if highlighted == 0:  # Enable Box-art Display
                                 settings["enable_boxart"] = not settings["enable_boxart"]
                                 save_settings(settings)
-                            elif highlighted == 1:  # Enable Image Cache
-                                settings["cache_enabled"] = not settings["cache_enabled"]
-                                if not settings["cache_enabled"]:
-                                    reset_image_cache()
-                                save_settings(settings)
-                            elif highlighted == 2:  # Reset Image Cache
-                                reset_image_cache()
-                            elif highlighted == 3:  # Update from GitHub
+                            elif highlighted == 1:  # Update from GitHub
                                 update_from_github()
-                            elif highlighted == 4:  # View Type
+                            elif highlighted == 2:  # View Type
                                 settings["view_type"] = "grid" if settings["view_type"] == "list" else "list"
                                 save_settings(settings)
-                            elif highlighted == 5:  # USA Games Only
+                            elif highlighted == 3:  # USA Games Only
                                 settings["usa_only"] = not settings["usa_only"]
                                 save_settings(settings)
-                            elif highlighted == 6:  # Debug Controller
-                                settings["debug_controller"] = not settings["debug_controller"]
-                                save_settings(settings)
-                            elif highlighted == 7:  # Work Directory
+                            elif highlighted == 4:  # Work Directory
                                 # Open folder browser for work directory selection
                                 show_folder_browser = True
                                 # Use current work_dir or fallback to a sensible default
@@ -3873,7 +4092,7 @@ try:
                                 load_folder_contents(folder_browser_current_path)
                                 # Set a flag to indicate we're selecting work directory
                                 selected_system_to_add = {"name": "Work Directory", "type": "work_dir"}
-                            elif highlighted == 8:  # ROMs Directory  
+                            elif highlighted == 5:  # ROMs Directory  
                                 # Open folder browser
                                 show_folder_browser = True
                                 # Use current roms_dir or fallback to a sensible default
@@ -3887,7 +4106,7 @@ try:
                                 else:
                                     folder_browser_current_path = current_roms
                                 load_folder_contents(folder_browser_current_path)
-                            elif highlighted == 9:  # Nintendo Switch Keys
+                            elif highlighted == 6:  # Nintendo Switch Keys
                                 # Open folder browser for .keys files
                                 show_folder_browser = True
                                 # Use current keys path or default to home directory
@@ -3904,10 +4123,16 @@ try:
                                 load_folder_contents(folder_browser_current_path)
                                 # Set a flag to indicate we're selecting Nintendo Switch keys
                                 selected_system_to_add = {"name": "Nintendo Switch Keys", "type": "switch_keys"}
-                            elif highlighted == 10:  # Remap Controller
+                            elif highlighted == 7:  # Remap Controller
                                 # Trigger controller remapping
                                 show_controller_mapping = True
-                            elif highlighted == 11:  # Systems Settings
+                            elif highlighted == 8:  # Add Systems
+                                mode = "add_systems"
+                                highlighted = 0
+                                add_systems_highlighted = 0
+                                # Load available systems in background
+                                load_available_systems()
+                            elif highlighted == 9:  # Systems Settings
                                 mode = "systems_settings"
                                 systems_settings_highlighted = 0
                                 highlighted = 0
@@ -4054,8 +4279,8 @@ try:
                             mode = "systems"
                             highlighted = 0
                         elif mode == "add_systems":
-                            mode = "systems"
-                            highlighted = 0
+                            mode = "settings"
+                            highlighted = 8  # Return to Add Systems option
                         elif mode == "systems_settings":
                             mode = "settings"
                             highlighted = 0
@@ -4090,39 +4315,6 @@ try:
                             create_folder_with_name()
                 elif event.type == pygame.JOYHATMOTION:
                     hat = joystick.get_hat(0)
-                    
-                    # Debug controller - capture D-pad movement
-                    if settings.get("debug_controller", False) and hat != (0, 0):
-                        # Find which action this D-pad direction maps to
-                        mapped_action = None
-                        print(f"DEBUG D-PAD: Looking for hat {hat} in mapping: {controller_mapping}")
-                        for action in controller_mapping:
-                            action_info = controller_mapping[action]
-                            print(f"DEBUG D-PAD: Checking action '{action}' with info: {action_info}")
-                            if ((isinstance(action_info, tuple) or isinstance(action_info, list)) and 
-                                len(action_info) >= 3 and
-                                action_info[0] == "hat" and 
-                                tuple(action_info[1:]) == hat):
-                                mapped_action = action
-                                print(f"DEBUG D-PAD: Found match! Action: {mapped_action}")
-                                break
-                            elif isinstance(action_info, tuple):
-                                print(f"DEBUG D-PAD: Tuple comparison - Expected: {hat}, Got: {action_info[1:]}")
-                            else:
-                                print(f"DEBUG D-PAD: Not a tuple: {action_info}")
-                        
-                        direction = ""
-                        if hat[1] == 1: direction = "Up"
-                        elif hat[1] == -1: direction = "Down"
-                        elif hat[0] == -1: direction = "Left"
-                        elif hat[0] == 1: direction = "Right"
-                        else: direction = f"{hat}"
-                        
-                        if mapped_action:
-                            current_pressed_button = f"D-Pad {direction} ({mapped_action})"
-                        else:
-                            current_pressed_button = f"D-Pad {direction} (unmapped)"
-                        last_button_time = pygame.time.get_ticks()
                     
                     # Only process if D-pad state actually changed
                     if hat == last_dpad_state:
@@ -4197,7 +4389,7 @@ try:
                                 max_items = 2  # Hide from menu + Custom ROM folder
                             else:  # systems
                                 visible_systems = get_visible_systems()
-                                max_items = len(visible_systems) + 2  # +2 for Add Systems and Settings options
+                                max_items = len(visible_systems) + 1  # +1 for Settings option
                             
                             if max_items > 0:
                                 if mode == "add_systems":

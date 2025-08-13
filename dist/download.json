@@ -249,16 +249,15 @@
   },
   {
     "name": "Nintendo Switch",
-    "api_url": "https://api.ultranx.ru/games/?limit=100000",
-    "download_url": "https://wow-vicious.com/NSPdir/base/",
-    "file_format": [".nsz", ".nsp", ".zip"],
+    "url": "https://wow-vicious.com/NSPdir/base/",
+    "regex": "<a href=\"(?P<href>[^\"]+)\">(?P<text>[^<]+)</a>",
+    "file_format": [".nsz", ".nsp"],
     "roms_folder": "SWITCH",
     "usa_regex": "(USA)",
+    "boxarts": "https://api.ultranx.ru/games/?limit=100000",
     "should_filter_usa": false,
     "should_unzip": true,
-    "should_decompress_nsz": true,
-    "use_api": true,
-    "supports_pagination": true
+    "should_decompress_nsz": true
   },
   {
     "name": "Other Systems",
