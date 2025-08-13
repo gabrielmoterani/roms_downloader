@@ -2412,7 +2412,7 @@ try:
                                 load_folder_contents(folder_browser_current_path)
                                 # Set a flag to indicate we're selecting work directory
                                 selected_system_to_add = {"name": "Work Directory", "type": "work_dir"}
-                            elif highlighted == 8:  # ROMs Directory  
+                            elif highlighted == 8:  # ROMs Directory
                                 # Open folder browser
                                 show_folder_browser = True
                                 # Use current roms_dir or fallback to a sensible default
@@ -2855,6 +2855,121 @@ try:
                         hat = (-1, 0)
                     elif input_matches_action(event, "right"):
                         hat = (1, 0)
+                    
+                    left_shoulder_button = get_controller_button("left_shoulder")
+                    right_shoulder_button = get_controller_button("right_shoulder")
+                    
+                    # Process as D-pad navigation if we matched a directional input
+                    if hat is not None:
+                        movement_occurred = False
+                        
+                        if hat[1] != 0 and not show_game_details:  # Up or Down
+                            if show_folder_name_input:
+                                # Navigate character selection up/down
+                                chars_per_row = 13
+                                total_chars = 36  # A-Z + 0-9
+                                if hat[1] == 1:  # Up
+                                    if folder_name_char_index >= chars_per_row:
+                                        folder_name_char_index -= chars_per_row
+                                        movement_occurred = True
+                                else:  # Down
+                                    if folder_name_char_index + chars_per_row < total_chars:
+                                        folder_name_char_index += chars_per_row
+                                        movement_occurred = True
+                            elif show_folder_browser:
+                                # Folder browser navigation
+                                if hat[1] == 1:  # Up
+                                    if folder_browser_items and folder_browser_highlighted > 0:
+                                        folder_browser_highlighted -= 1
+                                        movement_occurred = True
+                                else:  # Down
+                                    if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
+                                        folder_browser_highlighted += 1
+                                        movement_occurred = True
+                            elif mode == "add_systems":
+                                # Add systems navigation
+                                if hat[1] == 1:  # Up
+                                    if available_systems and add_systems_highlighted > 0:
+                                        add_systems_highlighted -= 1
+                                        movement_occurred = True
+                                else:  # Down
+                                    if available_systems and add_systems_highlighted < len(available_systems) - 1:
+                                        add_systems_highlighted += 1
+                                        movement_occurred = True
+                            elif mode == "games" and settings["view_type"] == "grid":
+                                # Grid navigation: move up/down
+                                cols = 4
+                                if hat[1] == 1:  # Up
+                                    if highlighted >= cols:
+                                        highlighted -= cols
+                                        movement_occurred = True
+                                else:  # Down
+                                    if highlighted + cols < len(game_list):
+                                        highlighted += cols
+                                        movement_occurred = True
+                            else:
+                                # Regular navigation for list view and other modes
+                                if mode == "games":
+                                    max_items = len(game_list)
+                                elif mode == "settings":
+                                    max_items = len(settings_list)
+                                elif mode == "add_systems":
+                                    max_items = len(available_systems)
+                                else:  # systems
+                                    regular_systems = [d for d in data if not d.get('list_systems', False)]
+                                    max_items = len(regular_systems) + 2  # +2 for Add Systems and Settings options
+                                
+                                if max_items > 0:
+                                    if mode == "add_systems":
+                                        add_systems_highlighted = (add_systems_highlighted - 1) % max_items if hat[1] == 1 else (add_systems_highlighted + 1) % max_items
+                                    else:
+                                        highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
+                                    movement_occurred = True
+                        elif hat[0] != 0 and not show_game_details:  # Left or Right
+                            if show_folder_name_input:
+                                # Navigate character selection left/right
+                                chars_per_row = 13
+                                total_chars = 36  # A-Z + 0-9
+                                if hat[0] < 0:  # Left
+                                    if folder_name_char_index % chars_per_row > 0:
+                                        folder_name_char_index -= 1
+                                        movement_occurred = True
+                                else:  # Right
+                                    if folder_name_char_index % chars_per_row < chars_per_row - 1 and folder_name_char_index < total_chars - 1:
+                                        folder_name_char_index += 1
+                                        movement_occurred = True
+                            elif mode == "games" and settings["view_type"] == "grid":
+                                # Grid navigation: move left/right
+                                cols = 4
+                                if hat[0] < 0:  # Left
+                                    if highlighted % cols > 0:
+                                        highlighted -= 1
+                                        movement_occurred = True
+                                else:  # Right
+                                    if highlighted % cols < cols - 1 and highlighted < len(game_list) - 1:
+                                        highlighted += 1
+                                        movement_occurred = True
+                            else:
+                                # List navigation: jump to different letter
+                                items = game_list
+                                old_highlighted = highlighted
+                                if hat[0] < 0:  # Left
+                                    highlighted = find_next_letter_index(items, highlighted, -1)
+                                else:  # Right
+                                    highlighted = find_next_letter_index(items, highlighted, 1)
+                                if highlighted != old_highlighted:
+                                    movement_occurred = True
+                        
+                        # Skip regular button processing for Odin directional buttons
+                        continue
+                    
+                    # Controller-aware button mapping
+                    select_button = get_controller_button("select")
+                    back_button = get_controller_button("back")
+                    start_button = get_controller_button("start")
+                    detail_button = get_controller_button("detail")
+                    left_shoulder_button = get_controller_button("left_shoulder")
+                    right_shoulder_button = get_controller_button("right_shoulder")
                     
                     # Process as D-pad navigation if we matched a directional input
                     if hat is not None:
