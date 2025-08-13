@@ -68,10 +68,25 @@ try:
     else:
         print("No joystick detected, use keyboard: Arrow keys, Enter, Escape, Space")
 
-    WHITE = (255, 255, 255)
-    BLACK = (0, 0, 0)
-    GREEN = (0, 255, 0)
-    GRAY = (180, 180, 180)
+    # Modern color palette
+    BACKGROUND = (18, 20, 24)        # Dark background
+    SURFACE = (30, 34, 40)           # Card/surface background
+    PRIMARY = (66, 165, 245)         # Primary accent (blue)
+    PRIMARY_DARK = (48, 123, 184)    # Darker primary
+    SECONDARY = (102, 187, 106)      # Secondary accent (green)
+    SECONDARY_DARK = (76, 140, 79)   # Darker secondary
+    TEXT_PRIMARY = (255, 255, 255)   # Primary text (white)
+    TEXT_SECONDARY = (189, 189, 189) # Secondary text (light gray)
+    TEXT_DISABLED = (117, 117, 117)  # Disabled text (darker gray)
+    WARNING = (255, 193, 7)          # Warning color (amber)
+    ERROR = (244, 67, 54)            # Error color (red)
+    SUCCESS = (76, 175, 80)          # Success color (green)
+    
+    # Legacy colors for compatibility
+    WHITE = TEXT_PRIMARY
+    BLACK = BACKGROUND
+    GREEN = SECONDARY
+    GRAY = TEXT_SECONDARY
 
     # Load JSON file
     try:
@@ -263,17 +278,17 @@ try:
             current_time = pygame.time.get_ticks()
             
             # Clear screen
-            screen.fill(WHITE)
+            screen.fill(BACKGROUND)
             
             # Title
             title_text = "Controller Setup"
-            title_surf = font.render(title_text, True, BLACK)
+            title_surf = font.render(title_text, True, TEXT_PRIMARY)
             screen.blit(title_surf, (20, 20))
             
             # Current button instruction
             button_key, button_description = essential_buttons[current_button_index]
             instruction_text = f"Press the {button_description}"
-            instruction_surf = font.render(instruction_text, True, BLACK)
+            instruction_surf = font.render(instruction_text, True, TEXT_PRIMARY)
             screen.blit(instruction_surf, (20, 80))
             
             # Progress
@@ -610,40 +625,70 @@ try:
             pygame.time.wait(3000)
 
     def draw_progress_bar(text, percent, downloaded=0, total_size=0, speed=0):
-        screen.fill(WHITE)
+        screen.fill(BACKGROUND)
         
-        # Draw title with instructions
-        title_surf = font.render("Download Progress", True, BLACK)
-        screen.blit(title_surf, (20, 10))
+        # Draw title with modern styling
+        title_font = pygame.font.Font(None, int(FONT_SIZE * 1.3))
+        title_surf = title_font.render("Download Progress", True, TEXT_PRIMARY)
+        screen.blit(title_surf, (20, 20))
         
-        # Draw current operation
-        text_surf = font.render(text, True, GREEN)
-        screen.blit(text_surf, (20, 40))
+        # Draw subtle underline for title
+        title_width = title_surf.get_width()
+        pygame.draw.line(screen, PRIMARY, (20, 20 + title_surf.get_height() + 5), 
+                        (20 + title_width, 20 + title_surf.get_height() + 5), 2)
         
-        # Draw progress bar background
-        bar_height = 20
-        bar_y = 70
+        # Draw current operation with enhanced styling
+        text_surf = font.render(text, True, TEXT_SECONDARY)
+        screen.blit(text_surf, (20, 60))
+        
+        # Modern progress bar with rounded corners and shadow
+        bar_height = 12
+        bar_y = 90
         screen_width, screen_height = screen.get_size()
         bar_width = min(screen_width - 80, 600)
         bar_x = 20
-        pygame.draw.rect(screen, GRAY, (bar_x, bar_y, bar_width, bar_height))
         
-        # Draw progress
+        # Draw shadow
+        shadow_rect = pygame.Rect(bar_x + 2, bar_y + 2, bar_width, bar_height)
+        pygame.draw.rect(screen, (0, 0, 0, 50), shadow_rect, border_radius=6)
+        
+        # Draw background
+        bg_rect = pygame.Rect(bar_x, bar_y, bar_width, bar_height)
+        pygame.draw.rect(screen, SURFACE, bg_rect, border_radius=6)
+        pygame.draw.rect(screen, TEXT_DISABLED, bg_rect, 1, border_radius=6)
+        
+        # Draw progress with gradient-like effect
         progress_width = int(bar_width * (percent / 100))
-        pygame.draw.rect(screen, GREEN, (bar_x, bar_y, progress_width, bar_height))
+        if progress_width > 0:
+            progress_rect = pygame.Rect(bar_x, bar_y, progress_width, bar_height)
+            # Use different colors based on progress
+            if percent < 30:
+                progress_color = WARNING
+            elif percent < 70:
+                progress_color = PRIMARY
+            else:
+                progress_color = SUCCESS
+            
+            pygame.draw.rect(screen, progress_color, progress_rect, border_radius=6)
+            
+            # Add a highlight for better depth
+            if progress_width > 4:
+                highlight_rect = pygame.Rect(bar_x, bar_y, progress_width, bar_height // 3)
+                highlight_color = tuple(min(255, c + 30) for c in progress_color)
+                pygame.draw.rect(screen, highlight_color, highlight_rect, border_radius=6)
         
-        # Draw percentage text
+        # Draw percentage text with better positioning
         percent_text = f"{percent}%"
-        percent_surf = font.render(percent_text, True, BLACK)
-        percent_x = bar_x + 5
-        screen.blit(percent_surf, (percent_x, bar_y + 2))
+        percent_surf = font.render(percent_text, True, TEXT_PRIMARY)
+        percent_x = bar_x + bar_width + 10  # Position to the right of the bar
+        screen.blit(percent_surf, (percent_x, bar_y - 2))
         
         # Draw size and speed info
         if total_size > 0:
             size_text = f"{format_size(downloaded)} / {format_size(total_size)}"
             if speed > 0:
                 size_text += f" - {format_size(speed)}/s"
-            size_surf = font.render(size_text, True, BLACK)
+            size_surf = font.render(size_text, True, TEXT_PRIMARY)
             size_x = bar_x + 5
             screen.blit(size_surf, (size_x, bar_y + bar_height + 10))
         
@@ -656,7 +701,7 @@ try:
         
         y = bar_y + bar_height + 40
         for instruction in instructions:
-            inst_surf = font.render(instruction, True, GRAY)
+            inst_surf = font.render(instruction, True, TEXT_DISABLED)
             screen.blit(inst_surf, (20, y))
             y += FONT_SIZE + 5
         
@@ -664,11 +709,11 @@ try:
 
     def draw_settings_menu():
         global settings_scroll_offset
-        screen.fill(WHITE)
+        screen.fill(BACKGROUND)
         y = 10
         
         # Draw title
-        title_surf = font.render("Settings", True, BLACK)
+        title_surf = font.render("Settings", True, TEXT_PRIMARY)
         screen.blit(title_surf, (20, y))
         y += FONT_SIZE + 10
         
@@ -682,7 +727,7 @@ try:
         ]
         
         for instruction in instructions:
-            inst_surf = font.render(instruction, True, GRAY)
+            inst_surf = font.render(instruction, True, TEXT_DISABLED)
             screen.blit(inst_surf, (20, y))
             y += FONT_SIZE + 5
         
@@ -717,7 +762,7 @@ try:
         # Draw settings items
         for i, setting_name in enumerate(visible_settings):
             actual_idx = start_idx + i
-            color = GREEN if actual_idx == highlighted else BLACK
+            color = PRIMARY if actual_idx == highlighted else TEXT_PRIMARY
             
             # Get current setting value
             setting_value = ""
@@ -768,11 +813,11 @@ try:
         draw_debug_controller()
 
     def draw_add_systems_menu():
-        screen.fill(WHITE)
+        screen.fill(BACKGROUND)
         y = 10
         
         # Draw title
-        title_surf = font.render("Add Systems", True, BLACK)
+        title_surf = font.render("Add Systems", True, TEXT_PRIMARY)
         screen.blit(title_surf, (20, y))
         y += FONT_SIZE + 10
         
@@ -786,7 +831,7 @@ try:
         ]
         
         for instruction in instructions:
-            inst_surf = font.render(instruction, True, GRAY)
+            inst_surf = font.render(instruction, True, TEXT_DISABLED)
             screen.blit(inst_surf, (20, y))
             y += FONT_SIZE + 5
         
@@ -794,7 +839,7 @@ try:
         
         # Show loading message if no systems loaded yet
         if not available_systems:
-            loading_surf = font.render("Loading available systems...", True, BLACK)
+            loading_surf = font.render("Loading available systems...", True, TEXT_PRIMARY)
             screen.blit(loading_surf, (20, y))
         else:
             # Calculate visible items for scrolling
@@ -809,7 +854,7 @@ try:
             # Draw available systems list with scrolling
             for i in range(start_idx, end_idx):
                 system = available_systems[i]
-                color = GREEN if i == add_systems_highlighted else BLACK
+                color = PRIMARY if i == add_systems_highlighted else TEXT_PRIMARY
                 system_text = f"{system['name']} - {system.get('size', 'Unknown size')}"
                 system_surf = font.render(system_text, True, color)
                 screen.blit(system_surf, (20, y))
@@ -831,11 +876,11 @@ try:
 
     def draw_systems_settings_menu():
         """Draw the systems settings menu that lists all systems"""
-        screen.fill(WHITE)
+        screen.fill(BACKGROUND)
         y = 10
         
         # Draw title
-        title_surf = font.render("Systems Settings", True, BLACK)
+        title_surf = font.render("Systems Settings", True, TEXT_PRIMARY)
         screen.blit(title_surf, (20, y))
         y += FONT_SIZE + 10
         
@@ -849,7 +894,7 @@ try:
         ]
         
         for instruction in instructions:
-            inst_surf = font.render(instruction, True, GRAY)
+            inst_surf = font.render(instruction, True, TEXT_DISABLED)
             screen.blit(inst_surf, (20, y))
             y += FONT_SIZE + 5
         
@@ -871,7 +916,7 @@ try:
         # Draw systems list
         for i, system in enumerate(visible_systems):
             actual_idx = start_idx + i
-            color = GREEN if actual_idx == systems_settings_highlighted else BLACK
+            color = PRIMARY if actual_idx == systems_settings_highlighted else TEXT_PRIMARY
             
             # Get system status
             system_settings = settings.get("system_settings", {})
@@ -909,11 +954,11 @@ try:
         if not selected_system_for_settings:
             return
             
-        screen.fill(WHITE)
+        screen.fill(BACKGROUND)
         y = 10
         
         # Draw title
-        title_surf = font.render(f"Settings for {selected_system_for_settings['name']}", True, BLACK)
+        title_surf = font.render(f"Settings for {selected_system_for_settings['name']}", True, TEXT_PRIMARY)
         screen.blit(title_surf, (20, y))
         y += FONT_SIZE + 10
         
@@ -927,7 +972,7 @@ try:
         ]
         
         for instruction in instructions:
-            inst_surf = font.render(instruction, True, GRAY)
+            inst_surf = font.render(instruction, True, TEXT_DISABLED)
             screen.blit(inst_surf, (20, y))
             y += FONT_SIZE + 5
         
@@ -946,7 +991,7 @@ try:
         
         # Draw settings options
         for i, option in enumerate(settings_options):
-            color = GREEN if i == system_settings_highlighted else BLACK
+            color = PRIMARY if i == system_settings_highlighted else TEXT_PRIMARY
             
             # Get current value
             if i == 0:  # Hide from main menu
@@ -967,23 +1012,40 @@ try:
         draw_debug_controller()
 
     def draw_grid_view(title, items, selected_indices):
-        screen.fill(WHITE)
-        y = 10
+        screen.fill(BACKGROUND)
+        y = 20
         
-        # Draw title
-        title_surf = font.render(title, True, BLACK)
+        # Draw title with modern styling
+        title_font = pygame.font.Font(None, int(FONT_SIZE * 1.3))
+        title_surf = title_font.render(title, True, TEXT_PRIMARY)
         screen.blit(title_surf, (20, y))
-        y += FONT_SIZE + 10
+        
+        # Draw subtle underline for title
+        title_width = title_surf.get_width()
+        pygame.draw.line(screen, PRIMARY, (20, y + title_surf.get_height() + 5), 
+                        (20 + title_width, y + title_surf.get_height() + 5), 2)
+        
+        y += title_surf.get_height() + 20
         
         # Draw download instruction if games are selected
         if selected_indices:
             start_button_name = get_button_name("start")
-            instruction = f"Press start to initiate downloading"
-            inst_surf = font.render(instruction, True, GRAY)
+            instruction = f"Press {start_button_name} to start downloading"
+            
+            # Create a subtle background box for the instruction
+            inst_surf = font.render(instruction, True, WARNING)
+            inst_width = inst_surf.get_width()
+            inst_height = inst_surf.get_height()
+            
+            # Draw background box
+            box_rect = pygame.Rect(15, y - 5, inst_width + 10, inst_height + 10)
+            pygame.draw.rect(screen, SURFACE, box_rect)
+            pygame.draw.rect(screen, WARNING, box_rect, 1)
+            
             screen.blit(inst_surf, (20, y))
-            y += FONT_SIZE + 5
+            y += inst_height + 15
         
-        y += 20
+        y += 10
         
         # Grid layout parameters
         cols = 4  # Number of columns
@@ -1031,66 +1093,108 @@ try:
                 display_text = os.path.splitext(item)[0]
                 original_name = item
             
-            # Highlight background if selected or highlighted
+            # Modern card-style background for each item
             is_highlighted = actual_idx == highlighted
             is_selected = actual_idx in selected_indices
             
+            # Draw card background
+            card_rect = pygame.Rect(x + 5, y + 5, cell_width - 10, cell_height - 10)
+            pygame.draw.rect(screen, SURFACE, card_rect, border_radius=8)
+            
+            # Draw card border/highlight
             if is_highlighted:
-                highlight_rect = pygame.Rect(x, y, cell_width - 5, cell_height - 5)
-                pygame.draw.rect(screen, GREEN, highlight_rect, 2)
+                pygame.draw.rect(screen, PRIMARY, card_rect, 3, border_radius=8)
+            elif is_selected:
+                pygame.draw.rect(screen, SECONDARY, card_rect, 2, border_radius=8)
+            else:
+                pygame.draw.rect(screen, TEXT_DISABLED, card_rect, 1, border_radius=8)
             
             # Draw thumbnail if available
-            thumb_y = y + 5
+            thumb_y = y + 10
             boxart_url = data[selected_system].get('boxarts', '') if selected_system < len(data) else ''
             thumbnail = get_thumbnail(item, boxart_url)
             
             if thumbnail and thumbnail != "loading":
                 # Center thumbnail in cell
-                thumb_x = x + 5
+                thumb_x = x + (cell_width - THUMBNAIL_SIZE[0]) // 2
                 thumb_rect = pygame.Rect(thumb_x, thumb_y, THUMBNAIL_SIZE[0], THUMBNAIL_SIZE[1])
+                
+                # Draw shadow for thumbnail
+                shadow_rect = pygame.Rect(thumb_x + 2, thumb_y + 2, THUMBNAIL_SIZE[0], THUMBNAIL_SIZE[1])
+                pygame.draw.rect(screen, (0, 0, 0, 30), shadow_rect, border_radius=4)
+                
                 screen.blit(thumbnail, thumb_rect)
                 
-                # Draw border around thumbnail
-                pygame.draw.rect(screen, BLACK, thumb_rect, 1)
+                # Enhanced border styling
+                if is_highlighted:
+                    pygame.draw.rect(screen, PRIMARY, thumb_rect, 2, border_radius=4)
+                elif is_selected:
+                    pygame.draw.rect(screen, SECONDARY, thumb_rect, 2, border_radius=4)
+                else:
+                    pygame.draw.rect(screen, TEXT_DISABLED, thumb_rect, 1, border_radius=4)
             
-            # Draw selection indicator
-            checkbox_x = x + 5
-            checkbox_y = y + 5
-            checkbox_rect = pygame.Rect(checkbox_x, checkbox_y, 15, 15)
-            pygame.draw.rect(screen, WHITE, checkbox_rect)
-            pygame.draw.rect(screen, BLACK, checkbox_rect, 1)
+            # Draw modern selection indicator in top-right corner
+            checkbox_size = 18
+            checkbox_x = x + cell_width - checkbox_size - 10
+            checkbox_y = y + 10
+            checkbox_rect = pygame.Rect(checkbox_x, checkbox_y, checkbox_size, checkbox_size)
             
             if is_selected:
-                # Draw X for selected
-                pygame.draw.line(screen, GREEN, (checkbox_x + 3, checkbox_y + 3), (checkbox_x + 12, checkbox_y + 12), 2)
-                pygame.draw.line(screen, GREEN, (checkbox_x + 12, checkbox_y + 3), (checkbox_x + 3, checkbox_y + 12), 2)
+                # Filled checkbox for selected items
+                pygame.draw.circle(screen, SECONDARY, (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size//2), checkbox_size//2)
+                pygame.draw.circle(screen, SECONDARY_DARK, (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size//2), checkbox_size//2, 2)
+                # Draw checkmark
+                pygame.draw.line(screen, TEXT_PRIMARY, 
+                               (checkbox_x + 4, checkbox_y + checkbox_size//2), 
+                               (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size - 4), 2)
+                pygame.draw.line(screen, TEXT_PRIMARY, 
+                               (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size - 4), 
+                               (checkbox_x + checkbox_size - 4, checkbox_y + 4), 2)
+            else:
+                # Empty circle for unselected items
+                circle_color = PRIMARY if is_highlighted else TEXT_DISABLED
+                pygame.draw.circle(screen, SURFACE, (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size//2), checkbox_size//2 - 1)
+                pygame.draw.circle(screen, circle_color, (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size//2), checkbox_size//2, 2)
             
             # Draw text (truncated to fit cell width)
-            text_y = thumb_y + THUMBNAIL_SIZE[1] + 5
-            max_text_width = cell_width - 10
+            text_y = thumb_y + THUMBNAIL_SIZE[1] + 10
+            max_text_width = cell_width - 20
             
             # Truncate text if too long
-            test_surf = font.render(display_text, True, BLACK)
+            if is_highlighted:
+                text_color = TEXT_PRIMARY
+            elif is_selected:
+                text_color = SECONDARY
+            else:
+                text_color = TEXT_SECONDARY
+                
+            test_surf = font.render(display_text, True, text_color)
             if test_surf.get_width() > max_text_width:
                 # Truncate text
                 for length in range(len(display_text), 0, -1):
                     truncated = display_text[:length] + "..."
-                    test_surf = font.render(truncated, True, BLACK)
+                    test_surf = font.render(truncated, True, text_color)
                     if test_surf.get_width() <= max_text_width:
                         display_text = truncated
                         break
             
-            text_color = GREEN if is_selected else BLACK
             text_surf = font.render(display_text, True, text_color)
-            text_x = x + 5
+            text_x = x + (cell_width - text_surf.get_width()) // 2  # Center text
             screen.blit(text_surf, (text_x, text_y))
         
-        # Draw bottom message if games are selected
+        # Draw bottom status message if games are selected
         if selected_indices:
-            message = f"Selected: {len(selected_indices)} games"
-            message_surf = font.render(message, True, GREEN)
+            message = f"✓ {len(selected_indices)} games selected"
+            message_surf = font.render(message, True, SUCCESS)
             screen_width, screen_height = screen.get_size()
-            message_y = screen_height - 30
+            message_y = screen_height - 35
+            
+            # Draw background for status message
+            msg_width = message_surf.get_width()
+            status_rect = pygame.Rect(15, message_y - 5, msg_width + 10, message_surf.get_height() + 10)
+            pygame.draw.rect(screen, SURFACE, status_rect)
+            pygame.draw.rect(screen, SUCCESS, status_rect, 1)
+            
             screen.blit(message_surf, (20, message_y))
         
         # Draw debug controller info
@@ -1100,23 +1204,40 @@ try:
             pygame.display.flip()
 
     def draw_menu(title, items, selected_indices):
-        screen.fill(WHITE)
-        y = 10  # Start closer to top
+        screen.fill(BACKGROUND)
+        y = 20  # Start with more margin
         
-        # Draw title with instructions
-        title_surf = font.render(title, True, BLACK)
+        # Draw title with better styling
+        title_font = pygame.font.Font(None, int(FONT_SIZE * 1.3))  # Larger title
+        title_surf = title_font.render(title, True, TEXT_PRIMARY)
         screen.blit(title_surf, (20, y))
-        y += FONT_SIZE + 10
+        
+        # Draw subtle underline for title
+        title_width = title_surf.get_width()
+        pygame.draw.line(screen, PRIMARY, (20, y + title_surf.get_height() + 5), 
+                        (20 + title_width, y + title_surf.get_height() + 5), 2)
+        
+        y += title_surf.get_height() + 20
 
         # Draw download instruction if in games mode and games are selected
         if mode == "games" and selected_games:
             start_button_name = get_button_name("start")
-            instruction = f"Press start to initiate downloading"
-            inst_surf = font.render(instruction, True, GRAY)
+            instruction = f"Press {start_button_name} to start downloading"
+            
+            # Create a subtle background box for the instruction
+            inst_surf = font.render(instruction, True, WARNING)
+            inst_width = inst_surf.get_width()
+            inst_height = inst_surf.get_height()
+            
+            # Draw background box
+            box_rect = pygame.Rect(15, y - 5, inst_width + 10, inst_height + 10)
+            pygame.draw.rect(screen, SURFACE, box_rect)
+            pygame.draw.rect(screen, WARNING, box_rect, 1)
+            
             screen.blit(inst_surf, (20, y))
-            y += FONT_SIZE + 5
+            y += inst_height + 15
         
-        y += 20  # Add some space after instructions
+        y += 10  # Add some space after instructions
         
         # Calculate visible items based on screen height
         row_height = max(FONT_SIZE + 10, THUMBNAIL_SIZE[1] + 10) if mode == "games" else FONT_SIZE + 10
@@ -1128,9 +1249,48 @@ try:
         # Draw items
         for i, item in enumerate(visible_items):
             actual_idx = start_idx + i
-            # Color is green if item is highlighted or selected
-            color = GREEN if actual_idx == highlighted or actual_idx in selected_indices else BLACK
-            prefix = "[x] " if actual_idx in selected_indices else "[ ] " if mode == "games" else ""
+            is_highlighted = actual_idx == highlighted
+            is_selected = actual_idx in selected_indices
+            
+            # Draw background for highlighted items
+            if is_highlighted:
+                item_rect = pygame.Rect(10, y - 3, screen.get_width() - 20, row_height - 2)
+                pygame.draw.rect(screen, SURFACE, item_rect)
+                pygame.draw.rect(screen, PRIMARY, item_rect, 2)
+            
+            # Determine text color and selection indicator
+            if is_highlighted:
+                text_color = TEXT_PRIMARY
+            elif is_selected:
+                text_color = SECONDARY
+            else:
+                text_color = TEXT_SECONDARY
+                
+            # Modern selection indicator for games
+            if mode == "games":
+                # Draw modern checkbox/selection indicator
+                checkbox_x = 20
+                checkbox_y = y + (row_height - 16) // 2
+                checkbox_rect = pygame.Rect(checkbox_x, checkbox_y, 16, 16)
+                
+                if is_selected:
+                    # Filled checkbox for selected items
+                    pygame.draw.rect(screen, SECONDARY, checkbox_rect)
+                    pygame.draw.rect(screen, SECONDARY_DARK, checkbox_rect, 2)
+                    # Draw checkmark
+                    pygame.draw.line(screen, TEXT_PRIMARY, 
+                                   (checkbox_x + 3, checkbox_y + 8), 
+                                   (checkbox_x + 7, checkbox_y + 12), 2)
+                    pygame.draw.line(screen, TEXT_PRIMARY, 
+                                   (checkbox_x + 7, checkbox_y + 12), 
+                                   (checkbox_x + 13, checkbox_y + 4), 2)
+                else:
+                    # Empty checkbox for unselected items
+                    pygame.draw.rect(screen, SURFACE, checkbox_rect)
+                    border_color = PRIMARY if is_highlighted else TEXT_DISABLED
+                    pygame.draw.rect(screen, border_color, checkbox_rect, 2)
+            
+            prefix = ""  # Remove old text prefix since we have visual indicators
             
             # Handle different item formats (Switch vs regular)
             if isinstance(item, dict):
@@ -1141,43 +1301,65 @@ try:
                 display_text = os.path.splitext(item)[0]
                 original_name = item
             
-            # Draw thumbnail if in games mode and boxart available
-            text_x = 20
+            # Determine text positioning
             if mode == "games":
+                text_x = 45  # Start after checkbox
                 boxart_url = data[selected_system].get('boxarts', '') if selected_system < len(data) else ''
                 thumbnail = get_thumbnail(item, boxart_url)
                 
                 if thumbnail and thumbnail != "loading":
-                    # Draw thumbnail
-                    thumb_rect = pygame.Rect(20, y, THUMBNAIL_SIZE[0], THUMBNAIL_SIZE[1])
+                    # Draw thumbnail with enhanced styling
+                    thumb_x = text_x
+                    thumb_y = y + (row_height - THUMBNAIL_SIZE[1]) // 2
+                    thumb_rect = pygame.Rect(thumb_x, thumb_y, THUMBNAIL_SIZE[0], THUMBNAIL_SIZE[1])
+                    
+                    # Draw shadow for thumbnail
+                    shadow_rect = pygame.Rect(thumb_x + 2, thumb_y + 2, THUMBNAIL_SIZE[0], THUMBNAIL_SIZE[1])
+                    pygame.draw.rect(screen, (0, 0, 0, 50), shadow_rect)
+                    
                     screen.blit(thumbnail, thumb_rect)
                     
-                    # Draw border around thumbnail if highlighted
-                    if actual_idx == highlighted:
-                        pygame.draw.rect(screen, GREEN, thumb_rect, 2)
+                    # Enhanced border styling
+                    if is_highlighted:
+                        pygame.draw.rect(screen, PRIMARY, thumb_rect, 3)
+                    elif is_selected:
+                        pygame.draw.rect(screen, SECONDARY, thumb_rect, 2)
+                    else:
+                        pygame.draw.rect(screen, TEXT_DISABLED, thumb_rect, 1)
                     
-                    text_x = 20 + THUMBNAIL_SIZE[0] + 10  # Move text after thumbnail
+                    text_x = thumb_x + THUMBNAIL_SIZE[0] + 15  # Move text after thumbnail
+            else:
+                text_x = 25  # Standard margin for non-games
             
-            # Draw text
-            item_surf = font.render(prefix + display_text, True, color)
+            # Draw text with proper color
+            item_surf = font.render(display_text, True, text_color)
             text_y = y + (row_height - FONT_SIZE) // 2  # Center text vertically
             screen.blit(item_surf, (text_x, text_y))
             y += row_height
 
-        # Draw bottom message if games are selected
+        # Draw bottom status message if games are selected
         if mode == "games" and selected_games:
-            message = f"Selected: {len(selected_games)} games"
-            message_surf = font.render(message, True, GREEN)
+            message = f"✓ {len(selected_games)} games selected"
+            message_surf = font.render(message, True, SUCCESS)
             screen_width, screen_height = screen.get_size()
-            message_y = screen_height - 50
+            message_y = screen_height - 35
+            
+            # Draw background for status message
+            msg_width = message_surf.get_width()
+            status_rect = pygame.Rect(15, message_y - 5, msg_width + 10, message_surf.get_height() + 10)
+            pygame.draw.rect(screen, SURFACE, status_rect)
+            pygame.draw.rect(screen, SUCCESS, status_rect, 1)
+            
             screen.blit(message_surf, (20, message_y))
         
         # Draw pagination info for Switch
         if mode == "games" and len(data) > 0 and data[selected_system].get('supports_pagination', False):
-            page_message = f"Page {current_page + 1} (L/R to change page)"
-            page_surf = font.render(page_message, True, GRAY)
+            page_message = f"Page {current_page + 1} • Use L/R to change page"
+            page_surf = font.render(page_message, True, TEXT_DISABLED)
             screen_width, screen_height = screen.get_size()
-            page_y = screen_height - 30
+            
+            # Position pagination below status message if present
+            page_y = screen_height - 20 if not selected_games else screen_height - 65
             screen.blit(page_surf, (20, page_y))
 
         # Draw debug controller info
@@ -1215,7 +1397,7 @@ try:
             game_name = os.path.splitext(game_item)[0] if isinstance(game_item, str) else 'Unknown Game'
         
         # Draw title
-        title_surf = font.render("Game Details", True, BLACK)
+        title_surf = font.render("Game Details", True, TEXT_PRIMARY)
         title_x = modal_x + 20
         title_y = modal_y + 20
         screen.blit(title_surf, (title_x, title_y))
@@ -1232,7 +1414,7 @@ try:
         
         for word in words:
             test_line = ' '.join(current_line + [word])
-            test_surf = font.render(test_line, True, BLACK)
+            test_surf = font.render(test_line, True, TEXT_PRIMARY)
             if test_surf.get_width() <= max_name_width:
                 current_line.append(word)
             else:
@@ -1340,7 +1522,7 @@ try:
                 title_text = f"Select ROM Folder for {selected_system_to_add['name']}"
         else:
             title_text = "Select Folder"
-        title_surf = font.render(title_text, True, BLACK)
+        title_surf = font.render(title_text, True, TEXT_PRIMARY)
         title_x = modal_x + 20
         title_y = modal_y + 20
         screen.blit(title_surf, (title_x, title_y))
@@ -1392,7 +1574,7 @@ try:
         
         inst_y = path_y + 35
         for instruction in instructions:
-            inst_surf = font.render(instruction, True, GRAY)
+            inst_surf = font.render(instruction, True, TEXT_DISABLED)
             screen.blit(inst_surf, (title_x, inst_y))
             inst_y += 20
         
@@ -1429,7 +1611,7 @@ try:
             is_highlighted = actual_idx == folder_browser_highlighted
             
             item_y = list_y + i * row_height
-            color = GREEN if is_highlighted else BLACK
+            color = PRIMARY if is_highlighted else TEXT_PRIMARY
             
             # Prefix based on type
             if item["type"] == "parent":
@@ -1472,7 +1654,7 @@ try:
         if current_time - last_button_time < BUTTON_DISPLAY_TIME and current_pressed_button:
             screen_width, screen_height = screen.get_size()
             debug_text = f"Button: {current_pressed_button}"
-            debug_surf = font.render(debug_text, True, BLACK)
+            debug_surf = font.render(debug_text, True, TEXT_PRIMARY)
             debug_x = screen_width - debug_surf.get_width() - 20
             debug_y = screen_height - 30
             
@@ -1487,28 +1669,60 @@ try:
             screen.blit(debug_surf, (debug_x, debug_y))
 
     def draw_loading_message(message):
-        screen.fill(WHITE)
+        screen.fill(BACKGROUND)
         
-        # Draw title
-        title_surf = font.render("Loading", True, BLACK)
-        screen.blit(title_surf, (20, 10))
+        # Create centered layout
+        screen_width, screen_height = screen.get_size()
+        center_x = screen_width // 2
+        center_y = screen_height // 2
         
-        # Draw message
-        message_surf = font.render(message, True, BLACK)
-        screen.blit(message_surf, (20, 50))
+        # Draw modern card background
+        card_width = min(screen_width - 80, 500)
+        card_height = 200
+        card_x = center_x - card_width // 2
+        card_y = center_y - card_height // 2
         
-        # Draw instructions
+        # Draw card shadow
+        shadow_rect = pygame.Rect(card_x + 4, card_y + 4, card_width, card_height)
+        pygame.draw.rect(screen, (0, 0, 0, 40), shadow_rect, border_radius=12)
+        
+        # Draw card background
+        card_rect = pygame.Rect(card_x, card_y, card_width, card_height)
+        pygame.draw.rect(screen, SURFACE, card_rect, border_radius=12)
+        pygame.draw.rect(screen, PRIMARY, card_rect, 2, border_radius=12)
+        
+        # Draw title with improved typography
+        title_font = pygame.font.Font(None, int(FONT_SIZE * 1.4))
+        title_surf = title_font.render("Loading", True, TEXT_PRIMARY)
+        title_x = center_x - title_surf.get_width() // 2
+        title_y = card_y + 30
+        screen.blit(title_surf, (title_x, title_y))
+        
+        # Draw accent line under title
+        line_width = title_surf.get_width() // 2
+        line_x = center_x - line_width // 2
+        line_y = title_y + title_surf.get_height() + 8
+        pygame.draw.line(screen, PRIMARY, (line_x, line_y), (line_x + line_width, line_y), 3)
+        
+        # Draw message with better positioning
+        message_surf = font.render(message, True, TEXT_SECONDARY)
+        message_x = center_x - message_surf.get_width() // 2
+        message_y = line_y + 25
+        screen.blit(message_surf, (message_x, message_y))
+        
+        # Draw instructions centered
         back_button_name = get_button_name("back")
         instructions = [
             "Please wait...",
             f"Press {back_button_name} to cancel"
         ]
         
-        y = 100
+        inst_y = message_y + message_surf.get_height() + 25
         for instruction in instructions:
-            inst_surf = font.render(instruction, True, GRAY)
-            screen.blit(inst_surf, (20, y))
-            y += FONT_SIZE + 5
+            inst_surf = font.render(instruction, True, TEXT_DISABLED)
+            inst_x = center_x - inst_surf.get_width() // 2
+            screen.blit(inst_surf, (inst_x, inst_y))
+            inst_y += FONT_SIZE + 8
         
         # Draw debug controller info
         draw_debug_controller()
@@ -2233,7 +2447,17 @@ try:
         """Get the display name for a button action based on dynamic controller mapping"""
         button_info = get_controller_button(action)
         if button_info is None:
-            return action.upper()
+            # Fallback to keyboard key names when no controller mapping exists
+            keyboard_names = {
+                "select": "Enter key",
+                "back": "Escape key", 
+                "up": "Up arrow",
+                "down": "Down arrow",
+                "left": "Left arrow", 
+                "right": "Right arrow",
+                "start": "Space key"
+            }
+            return keyboard_names.get(action.lower(), action.upper())
         
         # Handle different input types (both tuples and lists from JSON)
         if ((isinstance(button_info, tuple) or isinstance(button_info, list)) and 
@@ -2251,8 +2475,31 @@ try:
             else:
                 return "D-pad"
         else:
-            # Regular button
-            return f"Button {button_info}"
+            # Regular button - map to friendly names
+            return get_friendly_button_name(button_info)
+
+    def get_friendly_button_name(button_number):
+        """Convert button numbers to user-friendly names"""
+        # Common button mapping for handheld consoles (like RG35xxSP)
+        button_names = {
+            0: "A button",      # Usually the primary action button
+            1: "B button",      # Usually the secondary/back button  
+            2: "X button",      # Usually tertiary action
+            3: "Y button",      # Usually quaternary action
+            4: "L1 button",     # Left shoulder button
+            5: "R1 button",     # Right shoulder button
+            6: "L2 button",     # Left trigger
+            7: "R2 button",     # Right trigger
+            8: "Select button", # Select/back button
+            9: "Start button",  # Start/menu button
+            10: "L3 button",    # Left stick press
+            11: "R3 button",    # Right stick press
+            12: "Home button",  # System/home button
+            13: "Power button", # Power button
+        }
+        
+        # Return friendly name if available, otherwise fall back to generic
+        return button_names.get(button_number, f"Button {button_number}")
 
     def input_matches_action(event, action):
         """Check if the pygame event matches the mapped action"""
@@ -2323,7 +2570,7 @@ try:
         pygame.draw.rect(screen, BLACK, modal_rect, 3)
         
         # Title
-        title_surf = font.render("Enter Folder Name", True, BLACK)
+        title_surf = font.render("Enter Folder Name", True, TEXT_PRIMARY)
         title_x = modal_x + 20
         title_y = modal_y + 20
         screen.blit(title_surf, (title_x, title_y))
@@ -2331,12 +2578,12 @@ try:
         # Current folder name display
         name_y = title_y + 50
         name_text = folder_name_input_text if folder_name_input_text else "Enter folder name..."
-        name_surf = font.render(name_text, True, BLACK)
+        name_surf = font.render(name_text, True, TEXT_PRIMARY)
         screen.blit(name_surf, (title_x, name_y))
         
         # Character selection area
         char_y = name_y + 60
-        char_title_surf = font.render("Select Character:", True, BLACK)
+        char_title_surf = font.render("Select Character:", True, TEXT_PRIMARY)
         screen.blit(char_title_surf, (title_x, char_y))
         
         # Character grid (A-Z, 0-9)
@@ -2364,7 +2611,7 @@ try:
             pygame.draw.rect(screen, WHITE, char_rect)
             pygame.draw.rect(screen, BLACK, char_rect, 1)
             
-            char_surf = font.render(char, True, BLACK)
+            char_surf = font.render(char, True, TEXT_PRIMARY)
             char_text_x = char_x + (char_size - char_surf.get_width()) // 2
             char_text_y = char_y_pos + (char_size - char_surf.get_height()) // 2
             screen.blit(char_surf, (char_text_x, char_text_y))
@@ -2380,7 +2627,7 @@ try:
         
         inst_y = char_start_y + 120
         for instruction in instructions:
-            inst_surf = font.render(instruction, True, GRAY)
+            inst_surf = font.render(instruction, True, TEXT_DISABLED)
             screen.blit(inst_surf, (title_x, inst_y))
             inst_y += 20
 
