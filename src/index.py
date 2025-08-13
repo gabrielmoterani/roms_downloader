@@ -12,6 +12,9 @@ from urllib.parse import urljoin, unquote, quote
 import html
 from threading import Thread
 from queue import Queue
+import shutil
+from pathlib import Path
+from nsz import decompress
 
 # Check for development mode
 DEV_MODE = os.getenv('DEV_MODE', 'false').lower() == 'true'
@@ -2656,24 +2659,30 @@ try:
                         draw_progress_bar(f"Attempting NSZ decompression for {filename}...", 0)
                         
                         try:
-                            import subprocess
-                            import shutil
-                            
                             # Check if Nintendo Switch keys are configured and exist
                             keys_path = settings.get("switch_keys_path", "")
                             keys_available = False
+                            log_error(f"Switch keys path from config: '{keys_path}'")
                             
                             if keys_path:
+                                log_error(f"Checking configured keys path: {keys_path}")
                                 if os.path.isfile(keys_path) and keys_path.lower().endswith('.keys'):
                                     # Direct file path
                                     keys_available = True
                                     actual_keys_path = keys_path
+                                    log_error(f"Found keys file directly: {actual_keys_path}")
                                 elif os.path.isdir(keys_path):
                                     # Directory path, look for prod.keys
                                     prod_keys_path = os.path.join(keys_path, "prod.keys")
+                                    log_error(f"Checking for prod.keys in directory: {prod_keys_path}")
                                     if os.path.exists(prod_keys_path):
                                         keys_available = True
                                         actual_keys_path = prod_keys_path
+                                        log_error(f"Found prod.keys in directory: {actual_keys_path}")
+                                    else:
+                                        log_error(f"prod.keys not found in directory: {prod_keys_path}")
+                                else:
+                                    log_error(f"Keys path is neither a valid file nor directory: {keys_path}")
                             
                             # Also check default locations if not configured
                             if not keys_available:
@@ -2702,74 +2711,94 @@ try:
                                 switch_dir = os.path.expanduser("~/.switch")
                                 if not os.path.exists(switch_dir):
                                     os.makedirs(switch_dir, exist_ok=True)
+                                    log_error(f"Created .switch directory: {switch_dir}")
                                 
                                 expected_keys = os.path.join(switch_dir, "prod.keys")
+                                log_error(f"Expected keys location: {expected_keys}")
+                                log_error(f"Expected keys exists: {os.path.exists(expected_keys)}")
+                                log_error(f"Actual keys path: {actual_keys_path}")
+                                
                                 if not os.path.exists(expected_keys) and actual_keys_path != expected_keys:
                                     shutil.copy2(actual_keys_path, expected_keys)
-                                
-                                # Try multiple NSZ execution methods
-                                nsz_success = False
-                                
-                                # Method 1: Try nsz command directly
-                                try:
-                                    result = subprocess.run([
-                                        'nsz', '-D', file_path
-                                    ], capture_output=True, text=True, cwd=WORK_DIR, timeout=300, env=env)
-                                    
-                                    if result.returncode == 0:
-                                        nsz_success = True
-                                        print("NSZ decompression successful using 'nsz' command")
-                                    else:
-                                        print(f"NSZ command failed: {result.stderr}")
-                                except Exception as e:
-                                    print(f"NSZ command method failed: {e}")
-                                
-                                # Method 2: Try python -m nsz if first method failed
-                                if not nsz_success:
-                                    try:
-                                        result = subprocess.run([
-                                            sys.executable, '-m', 'nsz', '-D', file_path
-                                        ], capture_output=True, text=True, cwd=WORK_DIR, timeout=300, env=env)
-                                        
-                                        if result.returncode == 0:
-                                            nsz_success = True
-                                            print("NSZ decompression successful using 'python -m nsz'")
-                                        else:
-                                            print(f"Python -m nsz failed: {result.stderr}")
-                                    except Exception as e:
-                                        print(f"Python -m nsz method failed: {e}")
-                                
-                                if nsz_success:
-                                    draw_progress_bar(f"Decompressing {filename}... Complete", 100)
-                                    pygame.time.wait(500)
-                                    
-                                    # Find and move all NSP files in work directory
-                                    for file in os.listdir(WORK_DIR):
-                                        if file.endswith('.nsp'):
-                                            src_path = os.path.join(WORK_DIR, file)
-                                            dst_path = os.path.join(roms_folder, file)
-                                            os.rename(src_path, dst_path)
-                                            print(f"Moved decompressed NSP: {file}")
-                                    
-                                    # Remove original NSZ file after successful decompression
-                                    if os.path.exists(file_path):
-                                        os.remove(file_path)
-                                        
-                                    # Skip the normal file moving process for this file since we handled it here
-                                    continue
+                                    log_error(f"Copied keys from {actual_keys_path} to {expected_keys}")
+                                elif os.path.exists(expected_keys):
+                                    log_error(f"Keys already exist at expected location: {expected_keys}")
                                 else:
-                                    log_error(f"NSZ decompression failed for {filename}: All methods failed")
-                                    draw_progress_bar(f"NSZ decompression failed for {filename}", 0)
-                                    pygame.time.wait(2000)
+                                    log_error(f"Keys source and destination are the same: {actual_keys_path}")
                                 
-                        except subprocess.TimeoutExpired:
-                            log_error(f"NSZ decompression timed out for {filename}")
-                            draw_progress_bar(f"NSZ decompression timed out for {filename}", 0)
-                            pygame.time.wait(2000)
+                                # Use NSZ library directly for decompression
+                                # Change to work directory for decompression
+                                original_cwd = os.getcwd()
+                                original_argv = sys.argv.copy()
+                                try:
+                                    os.chdir(WORK_DIR)
+                                    log_error(f"Changed to WORK_DIR: {WORK_DIR}")
+                                    log_error(f"About to decompress NSZ file: {file_path}")
+                                    log_error(f"WORK_DIR contents before decompression: {os.listdir(WORK_DIR)}")
+                                    
+                                    # Use NSZ decompress function directly
+                                    nsz_filename = os.path.basename(file_path)
+                                    nsz_path = Path(nsz_filename).resolve()  # Use absolute path
+                                    output_path = Path(os.getcwd())  # Use absolute path to current directory
+                                    log_error(f"Using NSZ decompress function for: {nsz_filename}")
+                                    log_error(f"NSZ file absolute path: {nsz_path}")
+                                    log_error(f"Output directory absolute path: {output_path}")
+                                    log_error(f"NSZ file exists: {nsz_path.exists()}")
+                                    
+                                    try:
+                                        # Call NSZ decompress function directly
+                                        # Function needs absolute Path objects: filePath, outputDir, fixPadding
+                                        decompress(nsz_path, output_path, False)
+                                        log_error("NSZ decompress function completed successfully")
+                                    except Exception as e:
+                                        log_error(f"NSZ decompress function failed: {e}")
+                                        raise
+                                    
+                                    log_error("NSZ decompression completed using direct library")
+                                    log_error(f"WORK_DIR contents after decompression: {os.listdir(WORK_DIR)}")
+                                    
+                                    # Also check if NSZ created files in the same directory as the source file
+                                    nsz_dir = os.path.dirname(file_path)
+                                    if nsz_dir != WORK_DIR:
+                                        log_error(f"Checking NSZ source directory {nsz_dir}: {os.listdir(nsz_dir)}")
+                                    
+                                finally:
+                                    # Always restore original directory and argv
+                                    os.chdir(original_cwd)
+                                    sys.argv = original_argv
+                                
+                                draw_progress_bar(f"Decompressing {filename}... Complete", 100)
+                                pygame.time.wait(500)
+                                
+                                # Find and move all NSP files in work directory
+                                print(f"Checking WORK_DIR contents after NSZ decompression: {os.listdir(WORK_DIR)}")
+                                nsp_files_found = []
+                                for file in os.listdir(WORK_DIR):
+                                    if file.endswith('.nsp'):
+                                        nsp_files_found.append(file)
+                                        src_path = os.path.join(WORK_DIR, file)
+                                        dst_path = os.path.join(roms_folder, file)
+                                        os.rename(src_path, dst_path)
+                                        print(f"Moved decompressed NSP: {file}")
+                                
+                                if not nsp_files_found:
+                                    print(f"Warning: No NSP files found in WORK_DIR after decompression. Files present: {os.listdir(WORK_DIR)}")
+                                    # Check if any files were created
+                                    all_files = os.listdir(WORK_DIR)
+                                    print(f"All files in work directory: {all_files}")
+                                    
+                                # Remove original NSZ file after successful decompression
+                                if os.path.exists(file_path):
+                                    os.remove(file_path)
+                                    
+                                # Skip the normal file moving process for this file since we handled it here
+                                continue
+                                
                         except Exception as e:
                             log_error(f"NSZ decompression failed for {filename}: {e}")
                             draw_progress_bar(f"NSZ decompression failed for {filename}", 0)
                             pygame.time.wait(2000)
+                            raise
 
                     # Move files to ROMS
                     draw_progress_bar(f"Moving files to ROMS folder...", 0)
