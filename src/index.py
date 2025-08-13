@@ -1967,14 +1967,7 @@ try:
                     
                     # Handle NSZ decompression for Nintendo Switch games
                     elif filename.endswith(".nsz"):
-                        draw_progress_bar(f"Checking NSZ support for {filename}...", 0)
-                        
-                        # Check if NSZ package is available
-                        if not nsz_available:
-                            draw_progress_bar(f"NSZ decompression skipped - NSZ package not available", 0)
-                            log_error(f"NSZ decompression skipped for {filename}: NSZ package not available. Please install it manually: pip install nsz")
-                            pygame.time.wait(2000)
-                            continue
+                        draw_progress_bar(f"Attempting NSZ decompression for {filename}...", 0)
                         
                         try:
                             import subprocess
@@ -2028,12 +2021,39 @@ try:
                                 if not os.path.exists(expected_keys) and actual_keys_path != expected_keys:
                                     shutil.copy2(actual_keys_path, expected_keys)
                                 
-                                # Use nsz command-line tool to decompress with timeout
-                                result = subprocess.run([
-                                    'nsz', '-D', file_path
-                                ], capture_output=True, text=True, cwd=WORK_DIR, timeout=300, env=env)
+                                # Try multiple NSZ execution methods
+                                nsz_success = False
                                 
-                                if result.returncode == 0:
+                                # Method 1: Try nsz command directly
+                                try:
+                                    result = subprocess.run([
+                                        'nsz', '-D', file_path
+                                    ], capture_output=True, text=True, cwd=WORK_DIR, timeout=300, env=env)
+                                    
+                                    if result.returncode == 0:
+                                        nsz_success = True
+                                        print("NSZ decompression successful using 'nsz' command")
+                                    else:
+                                        print(f"NSZ command failed: {result.stderr}")
+                                except Exception as e:
+                                    print(f"NSZ command method failed: {e}")
+                                
+                                # Method 2: Try python -m nsz if first method failed
+                                if not nsz_success:
+                                    try:
+                                        result = subprocess.run([
+                                            sys.executable, '-m', 'nsz', '-D', file_path
+                                        ], capture_output=True, text=True, cwd=WORK_DIR, timeout=300, env=env)
+                                        
+                                        if result.returncode == 0:
+                                            nsz_success = True
+                                            print("NSZ decompression successful using 'python -m nsz'")
+                                        else:
+                                            print(f"Python -m nsz failed: {result.stderr}")
+                                    except Exception as e:
+                                        print(f"Python -m nsz method failed: {e}")
+                                
+                                if nsz_success:
                                     draw_progress_bar(f"Decompressing {filename}... Complete", 100)
                                     pygame.time.wait(500)
                                     
@@ -2052,7 +2072,7 @@ try:
                                     # Skip the normal file moving process for this file since we handled it here
                                     continue
                                 else:
-                                    log_error(f"NSZ decompression failed for {filename}: {result.stderr}")
+                                    log_error(f"NSZ decompression failed for {filename}: All methods failed")
                                     draw_progress_bar(f"NSZ decompression failed for {filename}", 0)
                                     pygame.time.wait(2000)
                                 
@@ -2474,65 +2494,70 @@ try:
             
             try:
                 import nsz
-                print("NSZ package is available")
+                print("NSZ package is available and imported successfully")
                 return True
             except EOFError:
                 # This is the error we're trying to fix - NSZ is trying to get input
+                # But the package is installed, so we can still use it with workarounds
                 print("NSZ package found but has input() calls during import")
-                print("NSZ functionality will be disabled to prevent crashes")
-                return False
+                print("NSZ will be available for command-line use")
+                return True  # Changed to True since package is installed
             except ImportError:
                 # NSZ is not installed
-                pass
+                print("NSZ package not found via import")
             finally:
                 # Restore original stdin
                 sys.stdin = original_stdin
                 
         except Exception as e:
-            print(f"Error checking NSZ package: {e}")
-            return False
+            print(f"Error checking NSZ package via import: {e}")
         
-        # If direct import failed, try command-line tool
+        # Check if NSZ is available as a module (even if import fails)
+        try:
+            import subprocess
+            import sys
+            
+            # Try running NSZ as a module
+            result = subprocess.run([sys.executable, "-m", "nsz", "--help"], 
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 or "usage:" in result.stdout.lower() or "nsz" in result.stdout.lower():
+                print("NSZ package is available as a module")
+                return True
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
+            print(f"NSZ module check failed: {e}")
+        
+        # If module check failed, try command-line tool
         try:
             import subprocess
             result = subprocess.run(['nsz', '--version'], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
                 print("NSZ command-line tool is available")
                 return True
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
+            print(f"NSZ command-line check failed: {e}")
+        
+        # Check if NSZ is installed in site-packages
+        try:
+            import pkg_resources
+            pkg_resources.get_distribution('nsz')
+            print("NSZ package found in site-packages")
+            return True
+        except:
             pass
         
-        # If command is not available, try to install the package
-        print("NSZ not found. Attempting to install NSZ package...")
+        # Final check - look for NSZ in Python path
         try:
-            import subprocess
-            import sys
-            
-            # Use pip to install nsz
-            result = subprocess.run([sys.executable, "-m", "pip", "install", "nsz"], 
-                                  capture_output=True, text=True, check=True)
-            print("NSZ package installed successfully")
-            
-            # Verify the command is now available (don't try to import again to avoid EOFError)
-            try:
-                result = subprocess.run(['nsz', '--version'], capture_output=True, text=True, timeout=5)
-                if result.returncode == 0:
-                    print("NSZ command-line tool is now available")
-                    return True
-                else:
-                    print("NSZ package installed but command-line tool not working")
-                    return False
-            except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
-                print("NSZ package installed but command-line tool not available")
-                return False
-                
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to install NSZ package: {e}")
-            print("You may need to install it manually: pip install nsz")
-            return False
-        except Exception as e:
-            print(f"Error checking/installing NSZ package: {e}")
-            return False
+            import importlib.util
+            spec = importlib.util.find_spec("nsz")
+            if spec is not None:
+                print("NSZ package found in Python path")
+                return True
+        except:
+            pass
+        
+        print("NSZ package not found. NSZ decompression will be disabled.")
+        print("If you have NSZ installed, it may not be accessible in this environment.")
+        return False
     
     # Check NSZ package on startup
     nsz_available = check_and_install_nsz()
