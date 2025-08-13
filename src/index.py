@@ -156,6 +156,12 @@ try:
     char_x = 0
     char_y = 0
     
+    # Search input modal state
+    show_search_input = False
+    search_input_text = ""
+    search_cursor_position = 0
+    search_cursor_blink_time = 0
+    
     # Settings will be loaded after functions are defined
     settings = {}
     
@@ -274,7 +280,7 @@ try:
 
     def needs_controller_mapping():
         """Check if we need to collect controller mapping"""
-        essential_buttons = ["select", "back", "start", "detail", "up", "down", "left", "right"]
+        essential_buttons = ["select", "back", "start", "detail", "search", "up", "down", "left", "right"]
         return not controller_mapping or not all(button in controller_mapping for button in essential_buttons)
 
     def get_visible_systems():
@@ -299,6 +305,7 @@ try:
             ("back", "BACK/CANCEL button (usually B)"),
             ("start", "START/MENU button"),
             ("detail", "DETAIL/SECONDARY button (usually Y)"),
+            ("search", "SEARCH button (for game search)"),
             ("left_shoulder", "Left Shoulder button (L/LB)"),
             ("right_shoulder", "Right Shoulder button (R/RB)")
         ]
@@ -2865,50 +2872,6 @@ try:
     last_button_time = 0
     BUTTON_DISPLAY_TIME = 1000  # milliseconds
     
-    # Controller-specific button mappings (only used buttons)
-    CONTROLLER_MAPPINGS = {
-        "generic": {
-            2: "Button 2", 3: "Button 3", 4: "Button 4", 6: "Button 6", 7: "Button 7", 10: "Button 10"
-        },
-        "xbox": {
-            0: "A", 1: "B", 3: "Y", 6: "Start", 9: "LB", 10: "RB"
-        },
-        "odin": {
-            1: "A", 0: "B", 2: "Y", 6: "Start", 9: "LB", 10: "RB",
-            11: "D-Up", 12: "D-Down", 13: "D-Left", 14: "D-Right"
-        },
-        "playstation": {
-            0: "Cross", 1: "Circle", 3: "Triangle", 9: "L1", 10: "R1", 6: "Options"
-        },
-        "nintendo": {
-            0: "B", 1: "A", 2: "Y", 4: "L", 5: "R", 9: "Plus"
-        },
-        "rg35xx": {
-            3: "Button A", 4: "Button B", 6: "Button X", 7: "Button L", 8: "Button R", 9: "SELECT"
-        },
-    }
-    
-    # Controller-specific navigation mappings
-    CONTROLLER_NAVIGATION = {
-        "generic": {
-            "select": 4, "back": 3, "start": 10, "detail": 2, "left_shoulder": 6, "right_shoulder": 7, "create_folder": 6
-        },
-        "xbox": {
-            "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 9, "right_shoulder": 10, "create_folder": 9  # A, B, Start, Y, LB, RB, LB
-        },
-        "odin": {
-            "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 9, "right_shoulder": 10, "create_folder": 9  # A, B, Start, Y, LB, RB, LB
-        },
-        "playstation": {
-            "select": 0, "back": 1, "start": 6, "detail": 3, "left_shoulder": 9, "right_shoulder": 10, "create_folder": 9  # Cross, Circle, Options, Triangle, L1, R1, L1
-        },
-        "nintendo": {
-            "select": 1, "back": 0, "start": 9, "detail": 2, "left_shoulder": 4, "right_shoulder": 5, "create_folder": 4  # A, B, Plus, Y, L, R, L
-        },
-        "rg35xx": {
-            "select": 3, "back": 4, "start": 9, "detail": 6, "left_shoulder": 7, "right_shoulder": 8, "create_folder": 7
-        }
-    }
     
     def get_controller_button(action):
         """Get the button number for a specific action based on dynamic controller mapping"""
@@ -2922,62 +2885,19 @@ try:
     
     def get_button_name(action):
         """Get the display name for a button action based on dynamic controller mapping"""
-        button_info = get_controller_button(action)
-        if button_info is None:
-            # Fallback to keyboard key names when no controller mapping exists
-            keyboard_names = {
-                "select": "Enter key",
-                "back": "Escape key", 
-                "up": "Up arrow",
-                "down": "Down arrow",
-                "left": "Left arrow", 
-                "right": "Right arrow",
-                "start": "Space key",
-                "search": "S key"
-            }
-            return keyboard_names.get(action.lower(), action.upper())
-        
-        # Handle different input types (both tuples and lists from JSON)
-        if ((isinstance(button_info, tuple) or isinstance(button_info, list)) and 
-            len(button_info) >= 3 and button_info[0] == "hat"):
-            # D-pad input
-            _, hat_x, hat_y = button_info[0:3]
-            if hat_y == 1:
-                return "D-pad UP"
-            elif hat_y == -1:
-                return "D-pad DOWN"
-            elif hat_x == -1:
-                return "D-pad LEFT"
-            elif hat_x == 1:
-                return "D-pad RIGHT"
-            else:
-                return "D-pad"
-        else:
-            # Regular button - map to friendly names
-            return get_friendly_button_name(button_info)
-
-    def get_friendly_button_name(button_number):
-        """Convert button numbers to user-friendly names"""
-        # Button mapping based on controller_mapping.json
-        button_names = {
-            0: "A button",      # select action
-            1: "B button",      # back action
-            2: "X button",      # unused
-            3: "Y button",      # detail action
-            4: "L1 button",     # unused
-            5: "R1 button",     # unused
-            6: "Start button",  # start action
-            7: "R2 button",     # unused
-            8: "Select button", # unused
-            9: "L2 button",     # left_shoulder action
-            10: "L3 button",    # right_shoulder action
-            11: "R3 button",    # unused
-            12: "Home button",  # unused
-            13: "Power button", # unused
+        # Fallback to keyboard key names when no controller mapping exists
+        keyboard_names = {
+            "select": "A (X)",
+            "back": "B (T)", 
+            "up": "Up arrow",
+            "down": "Down arrow",
+            "left": "Left arrow", 
+            "right": "Right arrow",
+            "start": "Start",
+            "search": "Select"
         }
+        return keyboard_names.get(action.lower(), action.upper())
         
-        # Return friendly name if available, otherwise fall back to generic
-        return button_names.get(button_number, f"Button {button_number}")
 
     def input_matches_action(event, action):
         """Check if the pygame event matches the mapped action"""
@@ -3168,6 +3088,162 @@ try:
             log_error(f"Failed to create folder in {folder_browser_current_path}", type(e).__name__, traceback.format_exc())
             show_folder_name_input = False
 
+    def draw_search_input_modal():
+        """Draw the search input modal overlay with modern styling"""
+        # Get actual screen dimensions
+        screen_width, screen_height = screen.get_size()
+        
+        # Enhanced semi-transparent background overlay with blur effect
+        overlay = pygame.Surface((screen_width, screen_height))
+        overlay.set_alpha(180)  # More opaque for better contrast
+        overlay.fill(BACKGROUND)
+        screen.blit(overlay, (0, 0))
+        
+        # Responsive modal sizing with better proportions
+        modal_width = min(max(int(screen_width * 0.85), 400), 700)
+        modal_height = min(max(int(screen_height * 0.7), 350), 550)
+        modal_x = (screen_width - modal_width) // 2
+        modal_y = (screen_height - modal_height) // 2
+        
+        # Draw modern modal background with shadow
+        shadow_rect = pygame.Rect(modal_x + 4, modal_y + 4, modal_width, modal_height)
+        pygame.draw.rect(screen, (0, 0, 0, 60), shadow_rect, border_radius=BORDER_RADIUS)
+        
+        modal_rect = pygame.Rect(modal_x, modal_y, modal_width, modal_height)
+        pygame.draw.rect(screen, SURFACE, modal_rect, border_radius=BORDER_RADIUS)
+        pygame.draw.rect(screen, PRIMARY, modal_rect, 3, border_radius=BORDER_RADIUS)
+        
+        # Enhanced title with styling
+        title_font = pygame.font.Font(None, int(FONT_SIZE * 1.3))
+        title_surf = title_font.render("Search Games", True, TEXT_PRIMARY)
+        title_x = modal_x + 25
+        title_y = modal_y + 25
+        screen.blit(title_surf, (title_x, title_y))
+        
+        # Draw title underline with gradient effect
+        title_width = title_surf.get_width()
+        underline_y = title_y + title_surf.get_height() + 8
+        pygame.draw.line(screen, PRIMARY, (title_x, underline_y), (title_x + title_width, underline_y), 3)
+        
+        # Enhanced search text display with modern input field styling
+        search_y = title_y + title_surf.get_height() + 30
+        search_input_height = 40
+        search_input_rect = pygame.Rect(title_x, search_y, modal_width - 50, search_input_height)
+        
+        # Draw input field background
+        pygame.draw.rect(screen, BACKGROUND, search_input_rect, border_radius=8)
+        pygame.draw.rect(screen, PRIMARY, search_input_rect, 2, border_radius=8)
+        
+        # Search text with placeholder styling
+        search_text_x = title_x + 15
+        search_text_y = search_y + (search_input_height - FONT_SIZE) // 2
+        
+        if search_input_text:
+            search_surf = font.render(search_input_text, True, TEXT_PRIMARY)
+            screen.blit(search_surf, (search_text_x, search_text_y))
+            
+            # Draw blinking cursor
+            current_time = pygame.time.get_ticks()
+            if (current_time % 1000) < 500:  # Blink every 500ms
+                cursor_x = search_text_x + search_surf.get_width() + 2
+                cursor_rect = pygame.Rect(cursor_x, search_text_y, 2, FONT_SIZE)
+                pygame.draw.rect(screen, PRIMARY, cursor_rect)
+        else:
+            # Placeholder text
+            placeholder_surf = font.render("Enter search term...", True, TEXT_DISABLED)
+            screen.blit(placeholder_surf, (search_text_x, search_text_y))
+        
+        # Character selection area with modern styling
+        char_section_y = search_y + search_input_height + 25
+        char_title_surf = font.render("Select Character:", True, TEXT_SECONDARY)
+        screen.blit(char_title_surf, (title_x, char_section_y))
+        
+        # Enhanced character grid with modern button styling
+        chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
+        chars_per_row = 13
+        char_size = 32
+        char_spacing = 6
+        
+        char_start_x = title_x
+        char_start_y = char_section_y + 35
+        
+        for i, char in enumerate(chars):
+            row = i // chars_per_row
+            col = i % chars_per_row
+            
+            char_x = char_start_x + col * (char_size + char_spacing)
+            char_y_pos = char_start_y + row * (char_size + char_spacing)
+            
+            # Modern button styling
+            is_selected = i == search_cursor_position
+            is_special = char in ["DEL", "CLEAR", "DONE", " "]
+            
+            # Button background with different states
+            char_rect = pygame.Rect(char_x, char_y_pos, char_size, char_size)
+            
+            if is_selected:
+                # Selected state with glow effect
+                glow_rect = pygame.Rect(char_x - 2, char_y_pos - 2, char_size + 4, char_size + 4)
+                pygame.draw.rect(screen, PRIMARY_LIGHT, glow_rect, border_radius=8)
+                pygame.draw.rect(screen, PRIMARY, char_rect, border_radius=6)
+                text_color = BACKGROUND
+            elif is_special:
+                # Special buttons (DEL, CLEAR, DONE, SPACE) with accent color
+                pygame.draw.rect(screen, SURFACE_HOVER, char_rect, border_radius=6)
+                pygame.draw.rect(screen, SECONDARY, char_rect, 2, border_radius=6)
+                text_color = TEXT_PRIMARY
+            else:
+                # Regular buttons
+                pygame.draw.rect(screen, SURFACE_HOVER, char_rect, border_radius=6)
+                pygame.draw.rect(screen, TEXT_DISABLED, char_rect, 1, border_radius=6)
+                text_color = TEXT_PRIMARY
+            
+            # Enhanced character display
+            if char == "DEL":
+                char_display = "DEL"
+                char_font = pygame.font.Font(None, int(FONT_SIZE * 0.7))
+            elif char == "CLEAR":
+                char_display = "CLR"
+                char_font = pygame.font.Font(None, int(FONT_SIZE * 0.7))
+            elif char == "DONE":
+                char_display = "OK"
+                char_font = pygame.font.Font(None, int(FONT_SIZE * 0.8))
+            elif char == " ":
+                char_display = "SPC"
+                char_font = pygame.font.Font(None, int(FONT_SIZE * 0.7))
+            else:
+                char_display = char.upper()
+                char_font = font
+            
+            char_surf = char_font.render(char_display, True, text_color)
+            char_text_x = char_x + (char_size - char_surf.get_width()) // 2
+            char_text_y = char_y_pos + (char_size - char_surf.get_height()) // 2
+            screen.blit(char_surf, (char_text_x, char_text_y))
+        
+        # Enhanced instructions with modern layout
+        instructions_y = char_start_y + (len(chars) // chars_per_row + 1) * (char_size + char_spacing) + 15
+        
+        # Create instruction cards
+        instruction_sections = [
+            ("Navigation", ["Use D-pad to select character"]),
+            ("Actions", ["Select: Add character", "Back: Delete character", "Start: Finish search"])
+        ]
+        
+        inst_x = title_x
+        for section_title, section_instructions in instruction_sections:
+            # Section title
+            section_surf = font.render(section_title, True, SECONDARY)
+            screen.blit(section_surf, (inst_x, instructions_y))
+            
+            # Section instructions
+            inst_y = instructions_y + FONT_SIZE + 5
+            for instruction in section_instructions:
+                inst_surf = font.render(f"• {instruction}", True, TEXT_DISABLED)
+                screen.blit(inst_surf, (inst_x + 10, inst_y))
+                inst_y += FONT_SIZE + 3
+            
+            inst_x += modal_width // 2  # Move to next column
+
     while running:
         try:
             clock.tick(FPS)
@@ -3193,7 +3269,9 @@ try:
                 systems_with_options = regular_systems + ["Settings"]
                 draw_menu("Select a System", systems_with_options, set())
             elif mode == "games":
-                if char_selector_mode:
+                if show_search_input:
+                    draw_search_input_modal()
+                elif char_selector_mode:
                     draw_character_selector()
                 elif game_list:  # Only draw if we have games
                     # Use filtered list if in search mode
@@ -3215,7 +3293,10 @@ try:
             
             # Draw modals if they should be shown
             modal_drawn = False
-            if show_folder_name_input:
+            if show_search_input:
+                draw_search_input_modal()
+                modal_drawn = True
+            elif show_folder_name_input:
                 draw_folder_name_input_modal()
                 modal_drawn = True
             elif show_game_details and current_game_detail is not None:
@@ -3234,7 +3315,28 @@ try:
                     running = False
                 elif event.type == pygame.KEYDOWN:
                     # Handle character selector navigation first
-                    if char_selector_mode:
+                    if show_search_input:
+                        chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
+                        chars_per_row = 13
+                        total_chars = len(chars)
+                        
+                        if event.key == pygame.K_UP:
+                            if search_cursor_position >= chars_per_row:
+                                search_cursor_position -= chars_per_row
+                            continue
+                        elif event.key == pygame.K_DOWN:
+                            if search_cursor_position + chars_per_row < total_chars:
+                                search_cursor_position += chars_per_row
+                            continue
+                        elif event.key == pygame.K_LEFT:
+                            if search_cursor_position % chars_per_row > 0:
+                                search_cursor_position -= 1
+                            continue
+                        elif event.key == pygame.K_RIGHT:
+                            if search_cursor_position % chars_per_row < chars_per_row - 1 and search_cursor_position < total_chars - 1:
+                                search_cursor_position += 1
+                            continue
+                    elif char_selector_mode:
                         if event.key == pygame.K_UP:
                             if char_y > 0:
                                 char_y -= 1
@@ -3292,10 +3394,26 @@ try:
                                 mode = "games"
                                 highlighted = 0
                         elif mode == "games":
-                            if highlighted in selected_games:
-                                selected_games.remove(highlighted)
-                            else:
-                                selected_games.add(highlighted)
+                            # Handle game selection with search mode support
+                            current_game_list = filtered_game_list if search_mode and search_query else game_list
+                            if highlighted < len(current_game_list):
+                                # Get the actual game from the current list
+                                selected_game = current_game_list[highlighted]
+                                # Find the original index in game_list for selected_games tracking
+                                if search_mode and search_query:
+                                    # In search mode, find original index
+                                    original_index = next((i for i, game in enumerate(game_list) if game == selected_game), None)
+                                    if original_index is not None:
+                                        if original_index in selected_games:
+                                            selected_games.remove(original_index)
+                                        else:
+                                            selected_games.add(original_index)
+                                else:
+                                    # Normal mode, use highlighted directly
+                                    if highlighted in selected_games:
+                                        selected_games.remove(highlighted)
+                                    else:
+                                        selected_games.add(highlighted)
                         elif mode == "settings":
                             # Toggle settings or reset cache
                             if highlighted == 0:  # Enable Box-art Display
@@ -3406,10 +3524,26 @@ try:
                                 # Set flag to indicate we're selecting custom ROM folder
                                 selected_system_to_add = {"name": f"Custom folder for {selected_system_for_settings['name']}", "type": "custom_rom_folder"}
                         elif mode == "games":
-                            if highlighted in selected_games:
-                                selected_games.remove(highlighted)
-                            else:
-                                selected_games.add(highlighted)
+                            # Handle game selection with search mode support
+                            current_game_list = filtered_game_list if search_mode and search_query else game_list
+                            if highlighted < len(current_game_list):
+                                # Get the actual game from the current list
+                                selected_game = current_game_list[highlighted]
+                                # Find the original index in game_list for selected_games tracking
+                                if search_mode and search_query:
+                                    # In search mode, find original index
+                                    original_index = next((i for i, game in enumerate(game_list) if game == selected_game), None)
+                                    if original_index is not None:
+                                        if original_index in selected_games:
+                                            selected_games.remove(original_index)
+                                        else:
+                                            selected_games.add(original_index)
+                                else:
+                                    # Normal mode, use highlighted directly
+                                    if highlighted in selected_games:
+                                        selected_games.remove(highlighted)
+                                    else:
+                                        selected_games.add(highlighted)
                     elif event.key == pygame.K_y:  # Y key = Detail view / Select folder
                         if show_folder_browser:
                             if selected_system_to_add is not None:
@@ -3491,10 +3625,16 @@ try:
                                 restart_app()
                         elif mode == "games" and not show_game_details and game_list:
                             # Show details modal for current game
-                            current_game_detail = game_list[highlighted]
-                            show_game_details = True
+                            current_game_list = filtered_game_list if search_mode and search_query else game_list
+                            if highlighted < len(current_game_list):
+                                current_game_detail = current_game_list[highlighted]
+                                show_game_details = True
                     elif event.key == pygame.K_ESCAPE:  # Escape = Back (Button 3)
-                        if char_selector_mode:
+                        if show_search_input:
+                            # Cancel search input
+                            show_search_input = False
+                            search_input_text = ""
+                        elif char_selector_mode:
                             # Exit character selector and cancel search
                             char_selector_mode = False
                             search_mode = False
@@ -3526,12 +3666,12 @@ try:
                             mode = "systems_settings"
                             highlighted = systems_settings_highlighted
                     elif event.key == pygame.K_s:  # S key = Search
-                        if mode == "games" and game_list and not char_selector_mode:
-                            # Enter search mode
-                            search_mode = True
-                            char_selector_mode = True
-                            char_x = 0
-                            char_y = 0
+                        if mode == "games" and game_list and not char_selector_mode and not show_search_input:
+                            # Enter search input modal
+                            show_search_input = True
+                            search_input_text = ""
+                            search_cursor_position = 0
+                            search_cursor_blink_time = pygame.time.get_ticks()
                     elif event.key == pygame.K_SPACE:  # Space = Start Download (Button 10)
                         if mode == "games" and selected_games:
                             draw_loading_message("Starting download...")
@@ -3542,7 +3682,33 @@ try:
                             # Finish folder name input
                             create_folder_with_name()
                     elif event.key == pygame.K_RETURN:  # Enter = Select
-                        if char_selector_mode:
+                        if show_search_input:
+                            # Handle character selection for search
+                            chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
+                            if search_cursor_position < len(chars):
+                                selected_char = chars[search_cursor_position]
+                                if selected_char == "DEL":
+                                    # Delete last character
+                                    if search_input_text:
+                                        search_input_text = search_input_text[:-1]
+                                elif selected_char == "CLEAR":
+                                    # Clear entire search query
+                                    search_input_text = ""
+                                elif selected_char == "DONE":
+                                    # Finish search input
+                                    show_search_input = False
+                                    search_query = search_input_text
+                                    if search_query:
+                                        search_mode = True
+                                        filtered_game_list = filter_games_by_search(game_list, search_query)
+                                        highlighted = 0  # Reset selection to first filtered item
+                                    else:
+                                        search_mode = False
+                                        filtered_game_list = []
+                                else:
+                                    # Add character to search query
+                                    search_input_text += selected_char
+                        elif char_selector_mode:
                             # Handle character selection
                             chars = [
                                 ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
@@ -3620,7 +3786,8 @@ try:
                         else:
                             # Regular navigation for list view and other modes
                             if mode == "games":
-                                max_items = len(game_list)
+                                current_game_list = filtered_game_list if search_mode and search_query else game_list
+                                max_items = len(current_game_list)
                             elif mode == "settings":
                                 max_items = len(settings_list)
                             elif mode == "add_systems":
@@ -3673,12 +3840,14 @@ try:
                         elif mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move down
                             cols = 4
-                            if highlighted + cols < len(game_list):
+                            current_game_list = filtered_game_list if search_mode and search_query else game_list
+                            if highlighted + cols < len(current_game_list):
                                 highlighted += cols
                         else:
                             # Regular navigation for list view and other modes
                             if mode == "games":
-                                max_items = len(game_list)
+                                current_game_list = filtered_game_list if search_mode and search_query else game_list
+                                max_items = len(current_game_list)
                             elif mode == "settings":
                                 max_items = len(settings_list)
                             elif mode == "add_systems":
@@ -3714,7 +3883,8 @@ try:
                                     highlighted -= 1
                             else:
                                 # List navigation: jump to different letter
-                                highlighted = find_next_letter_index(game_list, highlighted, -1)
+                                current_game_list = filtered_game_list if search_mode and search_query else game_list
+                                highlighted = find_next_letter_index(current_game_list, highlighted, -1)
                     elif event.key == pygame.K_RIGHT and mode == "games" and not show_game_details:
                         # Skip keyboard navigation if joystick is connected (prevents double input)
                         if joystick is not None:
@@ -3729,15 +3899,24 @@ try:
                             if settings["view_type"] == "grid":
                                 # Grid navigation: move right
                                 cols = 4
-                                if highlighted % cols < cols - 1 and highlighted < len(game_list) - 1:
+                                current_game_list = filtered_game_list if search_mode and search_query else game_list
+                                if highlighted % cols < cols - 1 and highlighted < len(current_game_list) - 1:
                                     highlighted += 1
                             else:
                                 # List navigation: jump to different letter
-                                highlighted = find_next_letter_index(game_list, highlighted, 1)
+                                current_game_list = filtered_game_list if search_mode and search_query else game_list
+                                highlighted = find_next_letter_index(current_game_list, highlighted, 1)
                     elif event.key == pygame.K_BACKSPACE:  # Backspace = Delete character
-                        if show_folder_name_input:
+                        if show_search_input:
+                            if search_input_text:
+                                search_input_text = search_input_text[:-1]
+                        elif show_folder_name_input:
                             if folder_name_input_text:
                                 folder_name_input_text = folder_name_input_text[:-1]
+                    elif event.type == pygame.TEXTINPUT and show_search_input:
+                        # Handle text input for search
+                        if len(search_input_text) < 50:  # Limit search length
+                            search_input_text += event.text
                     elif event.key == pygame.K_UP and not show_game_details:
                         # Skip keyboard navigation if joystick is connected (prevents double input)
                         if joystick is not None:
@@ -3772,7 +3951,8 @@ try:
                         else:
                             # Regular navigation for list view and other modes
                             if mode == "games":
-                                max_items = len(game_list)
+                                current_game_list = filtered_game_list if search_mode and search_query else game_list
+                                max_items = len(current_game_list)
                             elif mode == "settings":
                                 max_items = len(settings_list)
                             elif mode == "add_systems":
@@ -3826,12 +4006,14 @@ try:
                         elif mode == "games" and settings["view_type"] == "grid":
                             # Grid navigation: move down
                             cols = 4
-                            if highlighted + cols < len(game_list):
+                            current_game_list = filtered_game_list if search_mode and search_query else game_list
+                            if highlighted + cols < len(current_game_list):
                                 highlighted += cols
                         else:
                             # Regular navigation for list view and other modes
                             if mode == "games":
-                                max_items = len(game_list)
+                                current_game_list = filtered_game_list if search_mode and search_query else game_list
+                                max_items = len(current_game_list)
                             elif mode == "settings":
                                 max_items = len(settings_list)
                             elif mode == "add_systems":
@@ -3868,7 +4050,8 @@ try:
                                     highlighted -= 1
                             else:
                                 # List navigation: jump to different letter
-                                highlighted = find_next_letter_index(game_list, highlighted, -1)
+                                current_game_list = filtered_game_list if search_mode and search_query else game_list
+                                highlighted = find_next_letter_index(current_game_list, highlighted, -1)
                     elif event.key == pygame.K_RIGHT and mode == "games" and not show_game_details:
                         # Skip keyboard navigation if joystick is connected (prevents double input)
                         if joystick is not None:
@@ -3883,11 +4066,13 @@ try:
                             if settings["view_type"] == "grid":
                                 # Grid navigation: move right
                                 cols = 4
-                                if highlighted % cols < cols - 1 and highlighted < len(game_list) - 1:
+                                current_game_list = filtered_game_list if search_mode and search_query else game_list
+                                if highlighted % cols < cols - 1 and highlighted < len(current_game_list) - 1:
                                     highlighted += 1
                             else:
                                 # List navigation: jump to different letter
-                                highlighted = find_next_letter_index(game_list, highlighted, 1)
+                                current_game_list = filtered_game_list if search_mode and search_query else game_list
+                                highlighted = find_next_letter_index(current_game_list, highlighted, 1)
                 elif event.type == pygame.JOYBUTTONDOWN:
                     # Debug: Show all button presses
                     print(f"Joystick button pressed: {event.button}")
@@ -4125,7 +4310,33 @@ try:
                     # Note: Using input_matches_action() for dynamic button mapping
                     
                     if input_matches_action(event, "select"):  # Select
-                        if show_folder_name_input:
+                        if show_search_input:
+                            # Handle character selection for search
+                            chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
+                            if search_cursor_position < len(chars):
+                                selected_char = chars[search_cursor_position]
+                                if selected_char == "DEL":
+                                    # Delete last character
+                                    if search_input_text:
+                                        search_input_text = search_input_text[:-1]
+                                elif selected_char == "CLEAR":
+                                    # Clear entire search query
+                                    search_input_text = ""
+                                elif selected_char == "DONE":
+                                    # Finish search input
+                                    show_search_input = False
+                                    search_query = search_input_text
+                                    if search_query:
+                                        search_mode = True
+                                        filtered_game_list = filter_games_by_search(game_list, search_query)
+                                        highlighted = 0  # Reset selection to first filtered item
+                                    else:
+                                        search_mode = False
+                                        filtered_game_list = []
+                                else:
+                                    # Add character to search query
+                                    search_input_text += selected_char
+                        elif show_folder_name_input:
                             # Add selected character to folder name
                             chars = list("abcdefghijklmnopqrstuvwxyz0123456789")
                             if folder_name_char_index < len(chars):
@@ -4168,10 +4379,26 @@ try:
                                     mode = "games"
                                     highlighted = 0
                         elif mode == "games":
-                            if highlighted in selected_games:
-                                selected_games.remove(highlighted)
-                            else:
-                                selected_games.add(highlighted)
+                            # Handle game selection with search mode support
+                            current_game_list = filtered_game_list if search_mode and search_query else game_list
+                            if highlighted < len(current_game_list):
+                                # Get the actual game from the current list
+                                selected_game = current_game_list[highlighted]
+                                # Find the original index in game_list for selected_games tracking
+                                if search_mode and search_query:
+                                    # In search mode, find original index
+                                    original_index = next((i for i, game in enumerate(game_list) if game == selected_game), None)
+                                    if original_index is not None:
+                                        if original_index in selected_games:
+                                            selected_games.remove(original_index)
+                                        else:
+                                            selected_games.add(original_index)
+                                else:
+                                    # Normal mode, use highlighted directly
+                                    if highlighted in selected_games:
+                                        selected_games.remove(highlighted)
+                                    else:
+                                        selected_games.add(highlighted)
                         elif mode == "settings":
                             # Toggle settings or reset cache
                             if highlighted == 0:  # Enable Box-art Display
@@ -4282,10 +4509,26 @@ try:
                                 # Set flag to indicate we're selecting custom ROM folder
                                 selected_system_to_add = {"name": f"Custom folder for {selected_system_for_settings['name']}", "type": "custom_rom_folder"}
                         elif mode == "games":
-                            if highlighted in selected_games:
-                                selected_games.remove(highlighted)
-                            else:
-                                selected_games.add(highlighted)
+                            # Handle game selection with search mode support
+                            current_game_list = filtered_game_list if search_mode and search_query else game_list
+                            if highlighted < len(current_game_list):
+                                # Get the actual game from the current list
+                                selected_game = current_game_list[highlighted]
+                                # Find the original index in game_list for selected_games tracking
+                                if search_mode and search_query:
+                                    # In search mode, find original index
+                                    original_index = next((i for i, game in enumerate(game_list) if game == selected_game), None)
+                                    if original_index is not None:
+                                        if original_index in selected_games:
+                                            selected_games.remove(original_index)
+                                        else:
+                                            selected_games.add(original_index)
+                                else:
+                                    # Normal mode, use highlighted directly
+                                    if highlighted in selected_games:
+                                        selected_games.remove(highlighted)
+                                    else:
+                                        selected_games.add(highlighted)
                     elif input_matches_action(event, "detail"):  # Detail view / Select folder
                         if show_folder_browser:
                             print(f"Detail button pressed - Current folder: {folder_browser_current_path}")
@@ -4368,10 +4611,16 @@ try:
                                 restart_app()
                         elif mode == "games" and not show_game_details and game_list:
                             # Show details modal for current game
-                            current_game_detail = game_list[highlighted]
-                            show_game_details = True
+                            current_game_list = filtered_game_list if search_mode and search_query else game_list
+                            if highlighted < len(current_game_list):
+                                current_game_detail = current_game_list[highlighted]
+                                show_game_details = True
                     elif input_matches_action(event, "back"):  # Back
-                        if show_folder_browser:
+                        if show_search_input:
+                            # Delete last character in search input
+                            if search_input_text:
+                                search_input_text = search_input_text[:-1]
+                        elif show_folder_browser:
                             # Close folder browser
                             show_folder_browser = False
                         elif show_game_details:
@@ -4414,7 +4663,18 @@ try:
                             else:
                                 current_page -= 1  # Revert if no games found
                     elif input_matches_action(event, "start"):  # Start Download
-                        if mode == "games" and selected_games:
+                        if show_search_input:
+                            # Finish search input
+                            show_search_input = False
+                            search_query = search_input_text
+                            if search_query:
+                                search_mode = True
+                                filtered_game_list = filter_games_by_search(game_list, search_query)
+                                highlighted = 0  # Reset selection to first filtered item
+                            else:
+                                search_mode = False
+                                filtered_game_list = []
+                        elif mode == "games" and selected_games:
                             draw_loading_message("Starting download...")
                             download_files(selected_system, selected_games)
                             mode = "systems"
@@ -4422,6 +4682,13 @@ try:
                         elif show_folder_name_input:
                             # Finish folder name input
                             create_folder_with_name()
+                    elif input_matches_action(event, "search"):  # Search
+                        if mode == "games" and game_list and not char_selector_mode and not show_search_input:
+                            # Enter search input modal
+                            show_search_input = True
+                            search_input_text = ""
+                            search_cursor_position = 0
+                            search_cursor_blink_time = pygame.time.get_ticks()
                 elif event.type == pygame.JOYHATMOTION:
                     hat = joystick.get_hat(0)
                     
@@ -4440,7 +4707,20 @@ try:
                     movement_occurred = False
                     
                     if hat[1] != 0 and not show_game_details:  # Up or Down
-                        if show_folder_name_input:
+                        if show_search_input:
+                            # Navigate character selection up/down for search
+                            chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
+                            chars_per_row = 13
+                            total_chars = len(chars)
+                            if hat[1] == 1:  # Up
+                                if search_cursor_position >= chars_per_row:
+                                    search_cursor_position -= chars_per_row
+                                    movement_occurred = True
+                            else:  # Down
+                                if search_cursor_position + chars_per_row < total_chars:
+                                    search_cursor_position += chars_per_row
+                                    movement_occurred = True
+                        elif show_folder_name_input:
                             # Navigate character selection up/down
                             chars_per_row = 13
                             total_chars = 36  # A-Z + 0-9
@@ -4486,7 +4766,8 @@ try:
                         else:
                             # Regular navigation for list view and other modes
                             if mode == "games":
-                                max_items = len(game_list)
+                                current_game_list = filtered_game_list if search_mode and search_query else game_list
+                                max_items = len(current_game_list)
                             elif mode == "settings":
                                 max_items = len(settings_list)
                             elif mode == "add_systems":
@@ -4511,7 +4792,20 @@ try:
                                     highlighted = (highlighted - 1) % max_items if hat[1] == 1 else (highlighted + 1) % max_items
                                 movement_occurred = True
                     elif hat[0] != 0 and not show_game_details:  # Left or Right
-                        if show_folder_name_input:
+                        if show_search_input:
+                            # Navigate character selection left/right for search
+                            chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
+                            chars_per_row = 13
+                            total_chars = len(chars)
+                            if hat[0] < 0:  # Left
+                                if search_cursor_position % chars_per_row > 0:
+                                    search_cursor_position -= 1
+                                    movement_occurred = True
+                            else:  # Right
+                                if search_cursor_position % chars_per_row < chars_per_row - 1 and search_cursor_position < total_chars - 1:
+                                    search_cursor_position += 1
+                                    movement_occurred = True
+                        elif show_folder_name_input:
                             # Navigate character selection left/right
                             chars_per_row = 13
                             total_chars = 36  # A-Z + 0-9
