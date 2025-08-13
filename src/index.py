@@ -90,16 +90,27 @@ try:
     # Modern color palette
     BACKGROUND = (18, 20, 24)        # Dark background
     SURFACE = (30, 34, 40)           # Card/surface background
+    SURFACE_HOVER = (40, 44, 50)     # Card hover state
+    SURFACE_SELECTED = (45, 50, 60)  # Card selected state
     PRIMARY = (66, 165, 245)         # Primary accent (blue)
     PRIMARY_DARK = (48, 123, 184)    # Darker primary
+    PRIMARY_LIGHT = (100, 181, 246)  # Lighter primary
     SECONDARY = (102, 187, 106)      # Secondary accent (green)
     SECONDARY_DARK = (76, 140, 79)   # Darker secondary
+    SECONDARY_LIGHT = (129, 199, 132) # Lighter secondary
     TEXT_PRIMARY = (255, 255, 255)   # Primary text (white)
     TEXT_SECONDARY = (189, 189, 189) # Secondary text (light gray)
     TEXT_DISABLED = (117, 117, 117)  # Disabled text (darker gray)
     WARNING = (255, 193, 7)          # Warning color (amber)
     ERROR = (244, 67, 54)            # Error color (red)
     SUCCESS = (76, 175, 80)          # Success color (green)
+    
+    # Additional visual constants
+    SHADOW_COLOR = (0, 0, 0, 60)     # Shadow color with alpha
+    GLOW_COLOR = (66, 165, 245, 40)  # Glow color for highlights
+    BORDER_RADIUS = 12               # Default border radius
+    CARD_PADDING = 8                 # Card padding
+    THUMBNAIL_BORDER_RADIUS = 8      # Thumbnail border radius
     
     # Legacy colors for compatibility
     WHITE = TEXT_PRIMARY
@@ -168,7 +179,7 @@ try:
     # Image cache for thumbnails
     image_cache = {}
     image_queue = Queue()
-    THUMBNAIL_SIZE = (64, 64)
+    THUMBNAIL_SIZE = (96, 96)  # Increased thumbnail size for better quality and visibility
 
     def format_size(size_bytes):
         """Convert bytes to human readable format"""
@@ -1072,13 +1083,13 @@ try:
             # Show scroll indicator if needed
             if len(available_systems) > items_per_screen:
                 if start_idx > 0:
-                    # Show up arrow
-                    up_arrow = font.render("↑", True, GRAY)
-                    screen.blit(up_arrow, (screen_width - 30, 10))
+                    # Show up indicator
+                    up_arrow = font.render("UP", True, GRAY)
+                    screen.blit(up_arrow, (screen_width - 40, 10))
                 if end_idx < len(available_systems):
-                    # Show down arrow
-                    down_arrow = font.render("↓", True, GRAY)
-                    screen.blit(down_arrow, (screen_width - 30, screen_height - 30))
+                    # Show down indicator
+                    down_arrow = font.render("DOWN", True, GRAY)
+                    screen.blit(down_arrow, (screen_width - 50, screen_height - 30))
         
 
     def draw_systems_settings_menu():
@@ -1147,11 +1158,11 @@ try:
         # Show scroll indicator if needed
         if len(configurable_systems) > items_per_screen:
             if start_idx > 0:
-                up_arrow = font.render("↑", True, GRAY)
-                screen.blit(up_arrow, (screen_width - 30, 10))
+                up_arrow = font.render("UP", True, GRAY)
+                screen.blit(up_arrow, (screen_width - 40, 10))
             if end_idx < len(configurable_systems):
-                down_arrow = font.render("↓", True, GRAY)
-                screen.blit(down_arrow, (screen_width - 30, screen_height - 30))
+                down_arrow = font.render("DOWN", True, GRAY)
+                screen.blit(down_arrow, (screen_width - 50, screen_height - 30))
         
 
     def draw_system_settings_menu():
@@ -1218,54 +1229,61 @@ try:
         screen.fill(BACKGROUND)
         y = 20
         
-        # Draw title with modern styling
-        title_font = pygame.font.Font(None, int(FONT_SIZE * 1.3))
+        # Draw title with modern styling and gradient effect
+        title_font = pygame.font.Font(None, int(FONT_SIZE * 1.4))
         title_surf = title_font.render(title, True, TEXT_PRIMARY)
         screen.blit(title_surf, (20, y))
         
-        # Draw subtle underline for title
+        # Draw gradient underline for title
         title_width = title_surf.get_width()
-        pygame.draw.line(screen, PRIMARY, (20, y + title_surf.get_height() + 5), 
-                        (20 + title_width, y + title_surf.get_height() + 5), 2)
+        underline_y = y + title_surf.get_height() + 8
+        for i in range(title_width):
+            alpha = int(255 * (1 - i / title_width))
+            color = (PRIMARY[0], PRIMARY[1], PRIMARY[2], alpha)
+            pygame.draw.line(screen, color, (20 + i, underline_y), (20 + i, underline_y + 3), 1)
         
-        y += title_surf.get_height() + 20
+        y += title_surf.get_height() + 25
         
-        # Draw download instruction if games are selected
+        # Draw download instruction if games are selected with enhanced styling
         if selected_indices:
             start_button_name = get_button_name("start")
             instruction = f"Press {start_button_name} to start downloading"
             
-            # Create a subtle background box for the instruction
-            inst_surf = font.render(instruction, True, WARNING)
+            # Create a modern notification box for the instruction
+            inst_surf = font.render(instruction, True, TEXT_PRIMARY)
             inst_width = inst_surf.get_width()
             inst_height = inst_surf.get_height()
             
-            # Draw background box
-            box_rect = pygame.Rect(15, y - 5, inst_width + 10, inst_height + 10)
-            pygame.draw.rect(screen, SURFACE, box_rect)
-            pygame.draw.rect(screen, WARNING, box_rect, 1)
+            # Draw modern notification box with gradient
+            box_rect = pygame.Rect(15, y - 8, inst_width + 20, inst_height + 16)
+            pygame.draw.rect(screen, SURFACE, box_rect, border_radius=BORDER_RADIUS)
+            pygame.draw.rect(screen, PRIMARY, box_rect, 2, border_radius=BORDER_RADIUS)
             
-            screen.blit(inst_surf, (20, y))
-            y += inst_height + 15
+            # Add subtle glow effect
+            glow_rect = pygame.Rect(13, y - 10, inst_width + 24, inst_height + 20)
+            pygame.draw.rect(screen, GLOW_COLOR, glow_rect, border_radius=BORDER_RADIUS + 2)
+            
+            screen.blit(inst_surf, (25, y))
+            y += inst_height + 20
         
-        y += 10
+        y += 15
         
-        # Grid layout parameters
+        # Grid layout parameters with improved spacing
         cols = 4  # Number of columns
         screen_width, screen_height = screen.get_size()
-        cell_width = (screen_width - 40) // cols
-        cell_height = max(THUMBNAIL_SIZE[1] + 40, 100)
-        start_x = 20
+        cell_width = (screen_width - 60) // cols  # More padding
+        cell_height = max(THUMBNAIL_SIZE[1] + 60, 120)  # Increased height for better spacing
+        start_x = 30  # More padding from edges
         start_y = y
         
-        # Calculate visible items (ensure at least 2 rows)
+        # Calculate visible items (ensure at least 4 rows for better visibility)
         available_height = screen_height - start_y - 50
         if available_height > 0:
             calculated_rows = available_height // cell_height
-            rows_per_screen = max(2, calculated_rows)  # Minimum 2 rows
+            rows_per_screen = max(4, calculated_rows)  # Minimum 4 rows
         else:
             # Extremely small screen, fallback to minimum
-            rows_per_screen = 2
+            rows_per_screen = 4
         items_per_screen = cols * rows_per_screen
         
         # Calculate grid position of highlighted item
@@ -1305,24 +1323,42 @@ try:
                 display_text = os.path.splitext(item)[0]
                 original_name = item
             
-            # Modern card-style background for each item
+            # Enhanced card-style background for each item
             is_highlighted = actual_idx == highlighted
             is_selected = actual_idx in selected_indices
             
-            # Draw card background
-            card_rect = pygame.Rect(x + 5, y + 5, cell_width - 10, cell_height - 10)
-            pygame.draw.rect(screen, SURFACE, card_rect, border_radius=8)
-            
-            # Draw card border/highlight
+            # Determine card background color based on state
             if is_highlighted:
-                pygame.draw.rect(screen, PRIMARY, card_rect, 3, border_radius=8)
+                card_bg = SURFACE_HOVER
+                border_color = PRIMARY
+                border_width = 3
             elif is_selected:
-                pygame.draw.rect(screen, SECONDARY, card_rect, 2, border_radius=8)
+                card_bg = SURFACE_SELECTED
+                border_color = SECONDARY
+                border_width = 2
             else:
-                pygame.draw.rect(screen, TEXT_DISABLED, card_rect, 1, border_radius=8)
+                card_bg = SURFACE
+                border_color = TEXT_DISABLED
+                border_width = 1
             
-            # Draw thumbnail if available
-            thumb_y = y + 10
+            # Draw card background without shadows
+            card_rect = pygame.Rect(x + CARD_PADDING, y + CARD_PADDING, 
+                                  cell_width - (CARD_PADDING * 2), cell_height - (CARD_PADDING * 2))
+            
+            # Draw main card background
+            pygame.draw.rect(screen, card_bg, card_rect, border_radius=BORDER_RADIUS)
+            
+            # Draw card border with enhanced styling
+            pygame.draw.rect(screen, border_color, card_rect, border_width, border_radius=BORDER_RADIUS)
+            
+            # Simplified glow effect for highlighted items
+            if is_highlighted:
+                glow_rect = pygame.Rect(x + CARD_PADDING - 1, y + CARD_PADDING - 1, 
+                                      cell_width - (CARD_PADDING * 2) + 2, cell_height - (CARD_PADDING * 2) + 2)
+                pygame.draw.rect(screen, PRIMARY_LIGHT, glow_rect, 1, border_radius=BORDER_RADIUS + 1)
+            
+            # Draw thumbnail if available with enhanced styling
+            thumb_y = y + 15  # Slightly more padding from top
             boxart_url = data[selected_system].get('boxarts', '') if selected_system < len(data) else ''
             thumbnail = get_thumbnail(item, boxart_url)
             
@@ -1331,54 +1367,56 @@ try:
                 thumb_x = x + (cell_width - THUMBNAIL_SIZE[0]) // 2
                 thumb_rect = pygame.Rect(thumb_x, thumb_y, THUMBNAIL_SIZE[0], THUMBNAIL_SIZE[1])
                 
-                # Draw shadow for thumbnail
-                shadow_rect = pygame.Rect(thumb_x + 2, thumb_y + 2, THUMBNAIL_SIZE[0], THUMBNAIL_SIZE[1])
-                pygame.draw.rect(screen, (0, 0, 0, 30), shadow_rect, border_radius=4)
-                
+                # Draw thumbnail directly without shadows
                 screen.blit(thumbnail, thumb_rect)
                 
-                # Enhanced border styling
+                # Simplified border styling to prevent flickering
                 if is_highlighted:
-                    pygame.draw.rect(screen, PRIMARY, thumb_rect, 2, border_radius=4)
+                    pygame.draw.rect(screen, PRIMARY, thumb_rect, 3, border_radius=THUMBNAIL_BORDER_RADIUS)
                 elif is_selected:
-                    pygame.draw.rect(screen, SECONDARY, thumb_rect, 2, border_radius=4)
+                    pygame.draw.rect(screen, SECONDARY, thumb_rect, 2, border_radius=THUMBNAIL_BORDER_RADIUS)
                 else:
-                    pygame.draw.rect(screen, TEXT_DISABLED, thumb_rect, 1, border_radius=4)
+                    pygame.draw.rect(screen, TEXT_DISABLED, thumb_rect, 1, border_radius=THUMBNAIL_BORDER_RADIUS)
             
-            # Draw modern selection indicator in top-right corner
+            # Simplified selection indicator to prevent flickering
             checkbox_size = 18
             checkbox_x = x + cell_width - checkbox_size - 10
             checkbox_y = y + 10
             checkbox_rect = pygame.Rect(checkbox_x, checkbox_y, checkbox_size, checkbox_size)
             
             if is_selected:
-                # Filled checkbox for selected items
+                # Simple filled checkbox for selected items
                 pygame.draw.circle(screen, SECONDARY, (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size//2), checkbox_size//2)
                 pygame.draw.circle(screen, SECONDARY_DARK, (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size//2), checkbox_size//2, 2)
-                # Draw checkmark
-                pygame.draw.line(screen, TEXT_PRIMARY, 
+                
+                # Draw simple checkmark
+                check_color = TEXT_PRIMARY
+                pygame.draw.line(screen, check_color, 
                                (checkbox_x + 4, checkbox_y + checkbox_size//2), 
                                (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size - 4), 2)
-                pygame.draw.line(screen, TEXT_PRIMARY, 
+                pygame.draw.line(screen, check_color, 
                                (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size - 4), 
                                (checkbox_x + checkbox_size - 4, checkbox_y + 4), 2)
             else:
-                # Empty circle for unselected items
+                # Simple empty circle for unselected items
                 circle_color = PRIMARY if is_highlighted else TEXT_DISABLED
                 pygame.draw.circle(screen, SURFACE, (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size//2), checkbox_size//2 - 1)
                 pygame.draw.circle(screen, circle_color, (checkbox_x + checkbox_size//2, checkbox_y + checkbox_size//2), checkbox_size//2, 2)
             
-            # Draw text (truncated to fit cell width)
-            text_y = thumb_y + THUMBNAIL_SIZE[1] + 10
-            max_text_width = cell_width - 20
+            # Draw enhanced text (truncated to fit cell width)
+            text_y = thumb_y + THUMBNAIL_SIZE[1] + 15
+            max_text_width = cell_width - 25
             
-            # Truncate text if too long
+            # Enhanced text styling with better colors
             if is_highlighted:
                 text_color = TEXT_PRIMARY
+                text_shadow_color = (0, 0, 0, 100)
             elif is_selected:
-                text_color = SECONDARY
+                text_color = SECONDARY_LIGHT
+                text_shadow_color = (0, 0, 0, 80)
             else:
                 text_color = TEXT_SECONDARY
+                text_shadow_color = (0, 0, 0, 60)
                 
             test_surf = font.render(display_text, True, text_color)
             if test_surf.get_width() > max_text_width:
@@ -1392,11 +1430,13 @@ try:
             
             text_surf = font.render(display_text, True, text_color)
             text_x = x + (cell_width - text_surf.get_width()) // 2  # Center text
+            
+            # Draw main text (removed shadow to prevent flickering)
             screen.blit(text_surf, (text_x, text_y))
         
         # Draw bottom status message if games are selected
         if selected_indices:
-            message = f"✓ {len(selected_indices)} games selected"
+            message = f"{len(selected_indices)} games selected"
             message_surf = font.render(message, True, SUCCESS)
             screen_width, screen_height = screen.get_size()
             message_y = screen_height - 35
@@ -1567,7 +1607,7 @@ try:
 
         # Draw bottom status message if games are selected
         if mode == "games" and selected_games:
-            message = f"✓ {len(selected_games)} games selected"
+            message = f"{len(selected_games)} games selected"
             message_surf = font.render(message, True, SUCCESS)
             screen_width, screen_height = screen.get_size()
             message_y = screen_height - 35
@@ -1582,7 +1622,7 @@ try:
         
         # Draw pagination info for Switch
         if mode == "games" and len(data) > 0 and data[selected_system].get('supports_pagination', False):
-            page_message = f"Page {current_page + 1} • Use L/R to change page"
+            page_message = f"Page {current_page + 1} - Use L/R to change page"
             page_surf = font.render(page_message, True, TEXT_DISABLED)
             screen_width, screen_height = screen.get_size()
             
@@ -1595,26 +1635,28 @@ try:
             pygame.display.flip()
 
     def draw_game_details_modal(game_item):
-        """Draw the game details modal overlay"""
+        """Draw the game details modal overlay with enhanced styling"""
         # Get actual screen dimensions
         screen_width, screen_height = screen.get_size()
         
-        # Semi-transparent background overlay
+        # Enhanced semi-transparent background overlay with blur effect
         overlay = pygame.Surface((screen_width, screen_height))
-        overlay.set_alpha(128)
-        overlay.fill(BLACK)
+        overlay.set_alpha(160)  # More opaque for better contrast
+        overlay.fill(BACKGROUND)
         screen.blit(overlay, (0, 0))
         
-        # Responsive modal sizing
-        # Use 90% of screen width/height but with min/max constraints
-        modal_width = min(max(int(screen_width * 0.9), 300), 500)
-        modal_height = min(max(int(screen_height * 0.8), 250), 400)
+        # Responsive modal sizing with better proportions
+        modal_width = min(max(int(screen_width * 0.85), 350), 600)
+        modal_height = min(max(int(screen_height * 0.75), 300), 500)
         modal_x = (screen_width - modal_width) // 2
         modal_y = (screen_height - modal_height) // 2
         
+        # Draw main modal background
         modal_rect = pygame.Rect(modal_x, modal_y, modal_width, modal_height)
-        pygame.draw.rect(screen, WHITE, modal_rect)
-        pygame.draw.rect(screen, BLACK, modal_rect, 3)
+        pygame.draw.rect(screen, SURFACE, modal_rect, border_radius=BORDER_RADIUS)
+        
+        # Draw simple border styling
+        pygame.draw.rect(screen, PRIMARY, modal_rect, 2, border_radius=BORDER_RADIUS)
         
         # Game name
         if isinstance(game_item, dict):
@@ -1627,15 +1669,21 @@ try:
         else:
             game_name = os.path.splitext(game_item)[0] if isinstance(game_item, str) else 'Unknown Game'
         
-        # Draw title
-        title_surf = font.render("Game Details", True, TEXT_PRIMARY)
-        title_x = modal_x + 20
-        title_y = modal_y + 20
+        # Draw enhanced title with styling
+        title_font = pygame.font.Font(None, int(FONT_SIZE * 1.2))
+        title_surf = title_font.render("Game Details", True, TEXT_PRIMARY)
+        title_x = modal_x + 25
+        title_y = modal_y + 25
         screen.blit(title_surf, (title_x, title_y))
         
+        # Draw title underline
+        title_width = title_surf.get_width()
+        pygame.draw.line(screen, PRIMARY, (title_x, title_y + title_surf.get_height() + 5), 
+                        (title_x + title_width, title_y + title_surf.get_height() + 5), 2)
+        
         # Draw game name (with text wrapping if needed)
-        margin = max(20, int(modal_width * 0.05))  # Responsive margin (5% of width, min 20px)
-        name_y = title_y + 40
+        margin = max(25, int(modal_width * 0.06))  # Responsive margin (6% of width, min 25px)
+        name_y = title_y + title_surf.get_height() + 25
         max_name_width = modal_width - (margin * 2)
         
         # Simple text wrapping
@@ -1664,8 +1712,8 @@ try:
             name_surf = font.render(line, True, GREEN)
             screen.blit(name_surf, (modal_x + margin, name_y + i * (FONT_SIZE + 5)))
         
-        # Draw large image if available
-        image_y = name_y + len(lines) * (FONT_SIZE + 5) + 20
+        # Draw large image if available with enhanced styling
+        image_y = name_y + len(lines) * (FONT_SIZE + 8) + 25
         boxart_url = data[selected_system].get('boxarts', '') if selected_system < len(data) else ''
         thumbnail = get_thumbnail(game_item, boxart_url)
         
@@ -1673,51 +1721,76 @@ try:
             # Calculate appropriate image size that fits within modal responsively
             available_width = modal_width - (margin * 2)  # Use responsive margins
             available_height = modal_height - (image_y - modal_y) - (margin * 3)  # Space for instructions
-            # Scale max image size based on modal size, but set reasonable limits
-            max_image_size = min(available_width, available_height, min(modal_width // 2, 200))
+            # Scale max image size based on modal size, but set reasonable limits for better quality
+            max_image_size = min(available_width, available_height, min(modal_width // 2, 300))
             
             try:
-                # Scale image proportionally to fit within the available space
+                # Scale image proportionally to fit within the available space with better quality
                 original_size = thumbnail.get_size()
                 scale_factor = min(max_image_size / original_size[0], max_image_size / original_size[1])
                 new_width = int(original_size[0] * scale_factor)
                 new_height = int(original_size[1] * scale_factor)
                 large_size = (new_width, new_height)
                 
-                large_image = pygame.transform.scale(thumbnail, large_size)
+                # Use smoothscale for better image quality
+                try:
+                    large_image = pygame.transform.smoothscale(thumbnail, large_size)
+                except:
+                    # Fallback to regular scale if smoothscale fails
+                    large_image = pygame.transform.scale(thumbnail, large_size)
                 image_x = modal_x + (modal_width - large_size[0]) // 2
+                
+                # Draw the scaled image directly
                 screen.blit(large_image, (image_x, image_y))
                 
-                # Draw border around image
+                # Draw simple border around image
                 image_rect = pygame.Rect(image_x, image_y, large_size[0], large_size[1])
-                pygame.draw.rect(screen, BLACK, image_rect, 2)
+                pygame.draw.rect(screen, PRIMARY, image_rect, 2, border_radius=THUMBNAIL_BORDER_RADIUS)
+                
             except:
-                # Fallback to original thumbnail
+                # Fallback to original thumbnail with enhanced styling
                 image_x = modal_x + (modal_width - THUMBNAIL_SIZE[0]) // 2
+                
                 screen.blit(thumbnail, (image_x, image_y))
+                pygame.draw.rect(screen, PRIMARY, (image_x, image_y, THUMBNAIL_SIZE[0], THUMBNAIL_SIZE[1]), 2, border_radius=THUMBNAIL_BORDER_RADIUS)
         else:
-            # No image available text
+            # Enhanced "No image available" display
             no_image_text = "No image available"
-            no_image_surf = font.render(no_image_text, True, GRAY)
+            no_image_surf = font.render(no_image_text, True, TEXT_SECONDARY)
             no_image_x = modal_x + (modal_width - no_image_surf.get_width()) // 2
+            
+            # Draw placeholder box
+            placeholder_rect = pygame.Rect(no_image_x - 20, image_y - 10, no_image_surf.get_width() + 40, no_image_surf.get_height() + 20)
+            pygame.draw.rect(screen, SURFACE_HOVER, placeholder_rect, border_radius=BORDER_RADIUS)
+            pygame.draw.rect(screen, TEXT_DISABLED, placeholder_rect, 1, border_radius=BORDER_RADIUS)
+            
             screen.blit(no_image_surf, (no_image_x, image_y))
         
-        # Instructions with responsive positioning
+        # Enhanced instructions with responsive positioning
         back_button_name = get_button_name("back")
         instruction_text = f"Press {back_button_name} to close"
-        instruction_surf = font.render(instruction_text, True, WHITE)
+        instruction_surf = font.render(instruction_text, True, TEXT_PRIMARY)
         instruction_x = modal_x + (modal_width - instruction_surf.get_width()) // 2
         
         # Position instructions either below modal or at bottom of screen if modal is too tall
         instruction_y_below = modal_y + modal_height + margin
-        instruction_y_bottom = screen_height - 30
+        instruction_y_bottom = screen_height - 35
         
         # Use whichever position fits better on screen
         if instruction_y_below + instruction_surf.get_height() <= screen_height - 10:
             instruction_y = instruction_y_below
         else:
             instruction_y = instruction_y_bottom
-            
+        
+        # Draw enhanced instruction background
+        inst_width = instruction_surf.get_width()
+        inst_height = instruction_surf.get_height()
+        inst_rect = pygame.Rect(instruction_x - 15, instruction_y - 8, inst_width + 30, inst_height + 16)
+        pygame.draw.rect(screen, SURFACE, inst_rect, border_radius=BORDER_RADIUS)
+        pygame.draw.rect(screen, PRIMARY, inst_rect, 2, border_radius=BORDER_RADIUS)
+        
+        # Simple instruction styling without glow
+        
         screen.blit(instruction_surf, (instruction_x, instruction_y))
 
     def draw_folder_browser_modal():
@@ -2884,22 +2957,22 @@ try:
 
     def get_friendly_button_name(button_number):
         """Convert button numbers to user-friendly names"""
-        # Common button mapping for handheld consoles (like RG35xxSP)
+        # Button mapping based on controller_mapping.json
         button_names = {
-            0: "A button",      # Usually the primary action button
-            1: "B button",      # Usually the secondary/back button  
-            2: "X button",      # Usually tertiary action (also search)
-            3: "Y button",      # Usually quaternary action
-            4: "L1 button",     # Left shoulder button
-            5: "R1 button",     # Right shoulder button
-            6: "L2 button",     # Left trigger
-            7: "R2 button",     # Right trigger
-            8: "Select button", # Select/back button
-            9: "Start button",  # Start/menu button
-            10: "L3 button",    # Left stick press
-            11: "R3 button",    # Right stick press
-            12: "Home button",  # System/home button
-            13: "Power button", # Power button
+            0: "A button",      # select action
+            1: "B button",      # back action
+            2: "X button",      # unused
+            3: "Y button",      # detail action
+            4: "L1 button",     # unused
+            5: "R1 button",     # unused
+            6: "Start button",  # start action
+            7: "R2 button",     # unused
+            8: "Select button", # unused
+            9: "L2 button",     # left_shoulder action
+            10: "L3 button",    # right_shoulder action
+            11: "R3 button",    # unused
+            12: "Home button",  # unused
+            13: "Power button", # unused
         }
         
         # Return friendly name if available, otherwise fall back to generic
@@ -3525,19 +3598,6 @@ try:
                                         save_settings(settings)
                                         show_folder_browser = False
                                         selected_system_to_add = None
-                    elif event.key == pygame.K_UP and not show_game_details:
-                        # Skip keyboard navigation if joystick is connected (prevents double input)
-                        if joystick is not None:
-                            continue
-                        if show_folder_name_input:
-                            # Navigate character selection up
-                            chars_per_row = 13
-                            if folder_name_char_index >= chars_per_row:
-                                folder_name_char_index -= chars_per_row
-                        elif show_folder_browser:
-                            # Folder browser navigation
-                            if folder_browser_items and folder_browser_highlighted > 0:
-                                folder_browser_highlighted -= 1
                         elif mode == "add_systems":
                             # Add systems navigation
                             if available_systems and add_systems_highlighted > 0:
