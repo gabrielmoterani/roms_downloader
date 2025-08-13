@@ -162,6 +162,298 @@ try:
     search_cursor_position = 0
     search_cursor_blink_time = 0
     
+    # Continuous navigation state
+    navigation_state = {
+        'up': False,
+        'down': False, 
+        'left': False,
+        'right': False
+    }
+    navigation_start_time = {
+        'up': 0,
+        'down': 0,
+        'left': 0, 
+        'right': 0
+    }
+    navigation_last_repeat = {
+        'up': 0,
+        'down': 0,
+        'left': 0,
+        'right': 0  
+    }
+    navigation_velocity = {
+        'up': 0,
+        'down': 0,
+        'left': 0,
+        'right': 0
+    }
+    
+    # Navigation timing constants with progressive acceleration
+    NAVIGATION_INITIAL_DELAY = 100     # ms before repeating starts (much longer delay)
+    NAVIGATION_START_RATE = 400        # ms between repeats when starting (slow)
+    NAVIGATION_MAX_RATE = 100          # ms between repeats at maximum speed (fast)
+    NAVIGATION_ACCELERATION = 0.90     # rate multiplier each repeat (smaller = faster acceleration)
+    
+    def update_navigation_state():
+        """Update navigation state based on current joystick/controller input"""
+        global navigation_state, navigation_start_time, navigation_last_repeat, navigation_velocity
+        
+        current_time = pygame.time.get_ticks()
+        
+        # Reset all navigation states first
+        for direction in ['up', 'down', 'left', 'right']:
+            navigation_state[direction] = False
+        
+        # Check joystick state if available
+        if joystick and joystick.get_init():
+            # Check hat-based D-pad
+            if joystick.get_numhats() > 0:
+                hat = joystick.get_hat(0)
+                if hat[1] > 0:  # Up
+                    navigation_state['up'] = True
+                elif hat[1] < 0:  # Down  
+                    navigation_state['down'] = True
+                if hat[0] < 0:  # Left
+                    navigation_state['left'] = True
+                elif hat[0] > 0:  # Right
+                    navigation_state['right'] = True
+            
+            # Check button-based D-pad
+            for direction in ['up', 'down', 'left', 'right']:
+                button_info = get_controller_button(direction)
+                if isinstance(button_info, int) and joystick.get_numbuttons() > button_info:
+                    if joystick.get_button(button_info):
+                        navigation_state[direction] = True
+        
+        # Check keyboard state as fallback
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_UP]:
+            navigation_state['up'] = True
+        if keys[pygame.K_DOWN]:
+            navigation_state['down'] = True
+        if keys[pygame.K_LEFT]:
+            navigation_state['left'] = True
+        if keys[pygame.K_RIGHT]:
+            navigation_state['right'] = True
+        
+        # Update timing for newly pressed directions
+        for direction in ['up', 'down', 'left', 'right']:
+            if navigation_state[direction]:
+                if navigation_start_time[direction] == 0:
+                    # First press - record start time and reset velocity
+                    navigation_start_time[direction] = current_time
+                    navigation_last_repeat[direction] = current_time
+                    navigation_velocity[direction] = NAVIGATION_START_RATE
+            else:
+                # Released - reset timing and velocity
+                navigation_start_time[direction] = 0
+                navigation_last_repeat[direction] = 0
+                navigation_velocity[direction] = 0
+    
+    def should_navigate(direction):
+        """Check if we should trigger navigation for a given direction with progressive acceleration"""
+        if not navigation_state[direction]:
+            return False
+            
+        current_time = pygame.time.get_ticks()
+        start_time = navigation_start_time[direction]
+        last_repeat = navigation_last_repeat[direction]
+        current_velocity = navigation_velocity[direction]
+        
+        # Never allow navigation before the initial delay - let discrete events handle immediate response
+        if current_time - start_time < NAVIGATION_INITIAL_DELAY:
+            return False
+            
+        # Check if enough time has passed for the next repeat based on current velocity
+        time_since_last = current_time - last_repeat
+        if time_since_last >= current_velocity:
+            navigation_last_repeat[direction] = current_time
+            
+            # Accelerate for next repeat (but don't go below minimum rate)
+            new_velocity = current_velocity * NAVIGATION_ACCELERATION
+            navigation_velocity[direction] = max(new_velocity, NAVIGATION_MAX_RATE)
+            
+            return True
+            
+        return False
+    
+    def is_direction_held(direction):
+        """Check if a direction is currently being held"""
+        return navigation_state.get(direction, False)
+    
+    def handle_continuous_navigation():
+        """Handle continuous navigation by checking held directions"""
+        global movement_occurred
+        
+        # Check each direction for continuous navigation
+        for direction in ['up', 'down', 'left', 'right']:
+            if should_navigate(direction):
+                # Convert direction to hat coordinates
+                if direction == 'up':
+                    hat = (0, 1)
+                elif direction == 'down':
+                    hat = (0, -1) 
+                elif direction == 'left':
+                    hat = (-1, 0)
+                elif direction == 'right':
+                    hat = (1, 0)
+                
+                # Call simplified navigation logic directly
+                handle_directional_navigation_continuous(direction, hat)
+                break  # Only process one direction per frame to avoid conflicts
+    
+    def handle_directional_navigation_continuous(direction, hat):
+        """Simplified navigation function for continuous navigation (no event needed)"""
+        global movement_occurred, search_cursor_position, folder_name_char_index, folder_browser_highlighted
+        global add_systems_highlighted, highlighted, systems_settings_highlighted, system_settings_highlighted
+        
+        movement_occurred = False
+        
+        if hat[1] != 0 and not show_game_details:  # Up or Down
+            if show_search_input:
+                # Navigate character selection up/down for search
+                chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
+                chars_per_row = 13
+                total_chars = len(chars)
+                if direction == "up":
+                    if search_cursor_position >= chars_per_row:
+                        search_cursor_position -= chars_per_row
+                        movement_occurred = True
+                elif direction == "down":
+                    if search_cursor_position + chars_per_row < total_chars:
+                        search_cursor_position += chars_per_row
+                        movement_occurred = True
+            elif show_folder_name_input:
+                # Navigate character selection up/down
+                chars_per_row = 13
+                total_chars = 36  # A-Z + 0-9
+                if direction == "up":
+                    if folder_name_char_index >= chars_per_row:
+                        folder_name_char_index -= chars_per_row
+                        movement_occurred = True
+                elif direction == "down":
+                    if folder_name_char_index + chars_per_row < total_chars:
+                        folder_name_char_index += chars_per_row
+                        movement_occurred = True
+            elif show_folder_browser:
+                # Folder browser navigation
+                if direction == "up":
+                    if folder_browser_items and folder_browser_highlighted > 0:
+                        folder_browser_highlighted -= 1
+                        movement_occurred = True
+                elif direction == "down":
+                    if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
+                        folder_browser_highlighted += 1
+                        movement_occurred = True
+            elif mode == "add_systems":
+                # Add systems navigation
+                if direction == "up":
+                    if available_systems and add_systems_highlighted > 0:
+                        add_systems_highlighted -= 1
+                        movement_occurred = True
+                elif direction == "down":
+                    if available_systems and add_systems_highlighted < len(available_systems) - 1:
+                        add_systems_highlighted += 1
+                        movement_occurred = True
+            elif mode == "games" and settings["view_type"] == "grid":
+                # Grid navigation: move up/down
+                cols = 4
+                if direction == "up":
+                    if highlighted >= cols:
+                        highlighted -= cols
+                        movement_occurred = True
+                elif direction == "down":
+                    if highlighted + cols < len(game_list):
+                        highlighted += cols
+                        movement_occurred = True
+            else:
+                # Regular navigation for list view and other modes
+                if mode == "games":
+                    current_game_list = filtered_game_list if search_mode and search_query else game_list
+                    max_items = len(current_game_list)
+                elif mode == "settings":
+                    max_items = len(settings_list)
+                elif mode == "add_systems":
+                    max_items = len(available_systems)
+                elif mode == "systems_settings":
+                    configurable_systems = [d for d in data if not d.get('list_systems', False) and d.get('name') != 'Other Systems']
+                    max_items = len(configurable_systems)
+                elif mode == "system_settings":
+                    max_items = 2  # Hide from menu + Custom ROM folder
+                else:  # systems
+                    visible_systems = get_visible_systems()
+                    max_items = len(visible_systems) + 1  # +1 for Settings option
+                
+                if max_items > 0:
+                    if mode == "add_systems":
+                        if direction == "up":
+                            add_systems_highlighted = (add_systems_highlighted - 1) % max_items
+                        elif direction == "down":
+                            add_systems_highlighted = (add_systems_highlighted + 1) % max_items
+                    elif mode == "systems_settings":
+                        if direction == "up":
+                            systems_settings_highlighted = (systems_settings_highlighted - 1) % max_items
+                        elif direction == "down":
+                            systems_settings_highlighted = (systems_settings_highlighted + 1) % max_items
+                    elif mode == "system_settings":
+                        if direction == "up":
+                            system_settings_highlighted = (system_settings_highlighted - 1) % max_items
+                        elif direction == "down":
+                            system_settings_highlighted = (system_settings_highlighted + 1) % max_items
+                    else:
+                        if direction == "up":
+                            highlighted = (highlighted - 1) % max_items
+                        elif direction == "down":
+                            highlighted = (highlighted + 1) % max_items
+                    movement_occurred = True
+        elif hat[0] != 0 and not show_game_details:  # Left or Right
+            if show_search_input:
+                # Navigate character selection left/right for search
+                chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
+                chars_per_row = 13
+                total_chars = len(chars)
+                if direction == "left":
+                    if search_cursor_position % chars_per_row > 0:
+                        search_cursor_position -= 1
+                        movement_occurred = True
+                elif direction == "right":
+                    if search_cursor_position % chars_per_row < chars_per_row - 1 and search_cursor_position < total_chars - 1:
+                        search_cursor_position += 1
+                        movement_occurred = True
+            elif show_folder_name_input:
+                # Navigate character selection left/right
+                chars_per_row = 13
+                total_chars = 36  # A-Z + 0-9
+                if direction == "left":
+                    if folder_name_char_index % chars_per_row > 0:
+                        folder_name_char_index -= 1
+                        movement_occurred = True
+                elif direction == "right":
+                    if folder_name_char_index % chars_per_row < chars_per_row - 1 and folder_name_char_index < total_chars - 1:
+                        folder_name_char_index += 1
+                        movement_occurred = True
+            elif mode == "games" and settings["view_type"] == "grid":
+                # Grid navigation: move left/right
+                cols = 4
+                if direction == "left":
+                    if highlighted % cols > 0:
+                        highlighted -= 1
+                        movement_occurred = True
+                elif direction == "right":
+                    if highlighted % cols < cols - 1 and highlighted < len(game_list) - 1:
+                        highlighted += 1
+                        movement_occurred = True
+            else:
+                # List navigation: jump to different letter
+                items = game_list
+                old_highlighted = highlighted
+                if direction == "left":
+                    highlighted = find_next_letter_index(items, highlighted, -1)
+                elif direction == "right":
+                    highlighted = find_next_letter_index(items, highlighted, 1)
+                if highlighted != old_highlighted:
+                    movement_occurred = True
+    
     # Settings will be loaded after functions are defined
     settings = {}
     
@@ -2917,6 +3209,8 @@ try:
         
         return False
 
+
+
     # Game details modal state
     show_game_details = False
     current_game_detail = None
@@ -3244,10 +3538,169 @@ try:
             
             inst_x += modal_width // 2  # Move to next column
 
+    def handle_directional_navigation(event, hat):
+        """Unified function to handle directional navigation for both hat and button-based controllers"""
+        global movement_occurred, search_cursor_position, folder_name_char_index, folder_browser_highlighted
+        global add_systems_highlighted, highlighted, systems_settings_highlighted, system_settings_highlighted
+        
+        movement_occurred = False
+        
+        if hat[1] != 0 and not show_game_details:  # Up or Down
+            if show_search_input:
+                # Navigate character selection up/down for search
+                chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
+                chars_per_row = 13
+                total_chars = len(chars)
+                if input_matches_action(event, "up"):
+                    if search_cursor_position >= chars_per_row:
+                        search_cursor_position -= chars_per_row
+                        movement_occurred = True
+                elif input_matches_action(event, "down"):
+                    if search_cursor_position + chars_per_row < total_chars:
+                        search_cursor_position += chars_per_row
+                        movement_occurred = True
+            elif show_folder_name_input:
+                # Navigate character selection up/down
+                chars_per_row = 13
+                total_chars = 36  # A-Z + 0-9
+                if input_matches_action(event, "up"):
+                    if folder_name_char_index >= chars_per_row:
+                        folder_name_char_index -= chars_per_row
+                        movement_occurred = True
+                elif input_matches_action(event, "down"):
+                    if folder_name_char_index + chars_per_row < total_chars:
+                        folder_name_char_index += chars_per_row
+                        movement_occurred = True
+            elif show_folder_browser:
+                # Folder browser navigation
+                if input_matches_action(event, "up"):
+                    if folder_browser_items and folder_browser_highlighted > 0:
+                        folder_browser_highlighted -= 1
+                        movement_occurred = True
+                elif input_matches_action(event, "down"):
+                    if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
+                        folder_browser_highlighted += 1
+                        movement_occurred = True
+            elif mode == "add_systems":
+                # Add systems navigation
+                if input_matches_action(event, "up"):
+                    if available_systems and add_systems_highlighted > 0:
+                        add_systems_highlighted -= 1
+                        movement_occurred = True
+                elif input_matches_action(event, "down"):
+                    if available_systems and add_systems_highlighted < len(available_systems) - 1:
+                        add_systems_highlighted += 1
+                        movement_occurred = True
+            elif mode == "games" and settings["view_type"] == "grid":
+                # Grid navigation: move up/down
+                cols = 4
+                if input_matches_action(event, "up"):
+                    if highlighted >= cols:
+                        highlighted -= cols
+                        movement_occurred = True
+                elif input_matches_action(event, "down"):
+                    if highlighted + cols < len(game_list):
+                        highlighted += cols
+                        movement_occurred = True
+            else:
+                # Regular navigation for list view and other modes
+                if mode == "games":
+                    current_game_list = filtered_game_list if search_mode and search_query else game_list
+                    max_items = len(current_game_list)
+                elif mode == "settings":
+                    max_items = len(settings_list)
+                elif mode == "add_systems":
+                    max_items = len(available_systems)
+                elif mode == "systems_settings":
+                    configurable_systems = [d for d in data if not d.get('list_systems', False) and d.get('name') != 'Other Systems']
+                    max_items = len(configurable_systems)
+                elif mode == "system_settings":
+                    max_items = 2  # Hide from menu + Custom ROM folder
+                else:  # systems
+                    visible_systems = get_visible_systems()
+                    max_items = len(visible_systems) + 1  # +1 for Settings option
+                
+                if max_items > 0:
+                    if mode == "add_systems":
+                        if input_matches_action(event, "up"):
+                            add_systems_highlighted = (add_systems_highlighted - 1) % max_items
+                        elif input_matches_action(event, "down"):
+                            add_systems_highlighted = (add_systems_highlighted + 1) % max_items
+                    elif mode == "systems_settings":
+                        if input_matches_action(event, "up"):
+                            systems_settings_highlighted = (systems_settings_highlighted - 1) % max_items
+                        elif input_matches_action(event, "down"):
+                            systems_settings_highlighted = (systems_settings_highlighted + 1) % max_items
+                    elif mode == "system_settings":
+                        if input_matches_action(event, "up"):
+                            system_settings_highlighted = (system_settings_highlighted - 1) % max_items
+                        elif input_matches_action(event, "down"):
+                            system_settings_highlighted = (system_settings_highlighted + 1) % max_items
+                    else:
+                        if input_matches_action(event, "up"):
+                            highlighted = (highlighted - 1) % max_items
+                        elif input_matches_action(event, "down"):
+                            highlighted = (highlighted + 1) % max_items
+                    movement_occurred = True
+        elif hat[0] != 0 and not show_game_details:  # Left or Right
+            if show_search_input:
+                # Navigate character selection left/right for search
+                chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
+                chars_per_row = 13
+                total_chars = len(chars)
+                if input_matches_action(event, "left"):
+                    if search_cursor_position % chars_per_row > 0:
+                        search_cursor_position -= 1
+                        movement_occurred = True
+                elif input_matches_action(event, "right"):
+                    if search_cursor_position % chars_per_row < chars_per_row - 1 and search_cursor_position < total_chars - 1:
+                        search_cursor_position += 1
+                        movement_occurred = True
+            elif show_folder_name_input:
+                # Navigate character selection left/right
+                chars_per_row = 13
+                total_chars = 36  # A-Z + 0-9
+                if input_matches_action(event, "left"):
+                    if folder_name_char_index % chars_per_row > 0:
+                        folder_name_char_index -= 1
+                        movement_occurred = True
+                elif input_matches_action(event, "right"):
+                    if folder_name_char_index % chars_per_row < chars_per_row - 1 and folder_name_char_index < total_chars - 1:
+                        folder_name_char_index += 1
+                        movement_occurred = True
+            elif mode == "games" and settings["view_type"] == "grid":
+                # Grid navigation: move left/right
+                cols = 4
+                if hat[0] < 0:  # Left
+                    if highlighted % cols > 0:
+                        highlighted -= 1
+                        movement_occurred = True
+                else:  # Right
+                    if highlighted % cols < cols - 1 and highlighted < len(game_list) - 1:
+                        highlighted += 1
+                        movement_occurred = True
+            else:
+                # List navigation: jump to different letter
+                items = game_list
+                old_highlighted = highlighted
+                if hat[0] < 0:  # Left
+                    highlighted = find_next_letter_index(items, highlighted, -1)
+                else:  # Right
+                    highlighted = find_next_letter_index(items, highlighted, 1)
+                if highlighted != old_highlighted:
+                    movement_occurred = True
+
     while running:
         try:
             clock.tick(FPS)
             current_time = pygame.time.get_ticks()
+            
+            # Update continuous navigation state
+            update_navigation_state()
+            
+            # Handle continuous navigation (for held buttons/directions)
+            if not show_controller_mapping:
+                handle_continuous_navigation()
             
             # Check if we need to collect controller mapping first
             if show_controller_mapping:
@@ -4096,112 +4549,21 @@ try:
                     
                     # Process as D-pad navigation if we matched a directional input
                     if hat is not None:
-                        movement_occurred = False
+                        # Check if continuous navigation is active for this direction
+                        direction_held = False
+                        if hat[1] > 0 and is_direction_held('up'):
+                            direction_held = True
+                        elif hat[1] < 0 and is_direction_held('down'):
+                            direction_held = True
+                        elif hat[0] < 0 and is_direction_held('left'):
+                            direction_held = True
+                        elif hat[0] > 0 and is_direction_held('right'):
+                            direction_held = True
                         
-                        if hat[1] != 0 and not show_game_details:  # Up or Down
-                            if show_folder_name_input:
-                                # Navigate character selection up/down
-                                chars_per_row = 13
-                                total_chars = 36  # A-Z + 0-9
-                                if input_matches_action(event, "up"):
-                                    if folder_name_char_index >= chars_per_row:
-                                        folder_name_char_index -= chars_per_row
-                                        movement_occurred = True
-                                elif input_matches_action(event, "down"):
-                                    if folder_name_char_index + chars_per_row < total_chars:
-                                        folder_name_char_index += chars_per_row
-                                        movement_occurred = True
-                            elif show_folder_browser:
-                                # Folder browser navigation
-                                if input_matches_action(event, "up"):
-                                    if folder_browser_items and folder_browser_highlighted > 0:
-                                        folder_browser_highlighted -= 1
-                                        movement_occurred = True
-                                elif input_matches_action(event, "down"):
-                                    if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
-                                        folder_browser_highlighted += 1
-                                        movement_occurred = True
-                            elif mode == "add_systems":
-                                # Add systems navigation
-                                if input_matches_action(event, "up"):
-                                    if available_systems and add_systems_highlighted > 0:
-                                        add_systems_highlighted -= 1
-                                        movement_occurred = True
-                                elif input_matches_action(event, "down"):
-                                    if available_systems and add_systems_highlighted < len(available_systems) - 1:
-                                        add_systems_highlighted += 1
-                                        movement_occurred = True
-                            elif mode == "games" and settings["view_type"] == "grid":
-                                # Grid navigation: move up/down
-                                cols = 4
-                                if input_matches_action(event, "up"):
-                                    if highlighted >= cols:
-                                        highlighted -= cols
-                                        movement_occurred = True
-                                elif input_matches_action(event, "down"):
-                                    if highlighted + cols < len(game_list):
-                                        highlighted += cols
-                                        movement_occurred = True
-                            else:
-                                # Regular navigation for list view and other modes
-                                if mode == "games":
-                                    max_items = len(game_list)
-                                elif mode == "settings":
-                                    max_items = len(settings_list)
-                                elif mode == "add_systems":
-                                    max_items = len(available_systems)
-                                else:  # systems
-                                    visible_systems = get_visible_systems()
-                                    max_items = len(visible_systems) + 1  # +1 for Settings option
-                                
-                                if max_items > 0:
-                                    if mode == "add_systems":
-                                        if input_matches_action(event, "up"):
-                                            add_systems_highlighted = (add_systems_highlighted - 1) % max_items
-                                        elif input_matches_action(event, "down"):
-                                            add_systems_highlighted = (add_systems_highlighted + 1) % max_items
-                                    else:
-                                        if input_matches_action(event, "up"):
-                                            highlighted = (highlighted - 1) % max_items
-                                        elif input_matches_action(event, "down"):
-                                            highlighted = (highlighted + 1) % max_items
-                                    movement_occurred = True
-                        elif hat[0] != 0 and not show_game_details:  # Left or Right
-                            if show_folder_name_input:
-                                # Navigate character selection left/right
-                                chars_per_row = 13
-                                total_chars = 36  # A-Z + 0-9
-                                if hat[0] < 0:  # Left
-                                    if folder_name_char_index % chars_per_row > 0:
-                                        folder_name_char_index -= 1
-                                        movement_occurred = True
-                                else:  # Right
-                                    if folder_name_char_index % chars_per_row < chars_per_row - 1 and folder_name_char_index < total_chars - 1:
-                                        folder_name_char_index += 1
-                                        movement_occurred = True
-                            elif mode == "games" and settings["view_type"] == "grid":
-                                # Grid navigation: move left/right
-                                cols = 4
-                                if hat[0] < 0:  # Left
-                                    if highlighted % cols > 0:
-                                        highlighted -= 1
-                                        movement_occurred = True
-                                else:  # Right
-                                    if highlighted % cols < cols - 1 and highlighted < len(game_list) - 1:
-                                        highlighted += 1
-                                        movement_occurred = True
-                            else:
-                                # List navigation: jump to different letter
-                                items = game_list
-                                old_highlighted = highlighted
-                                if hat[0] < 0:  # Left
-                                    highlighted = find_next_letter_index(items, highlighted, -1)
-                                else:  # Right
-                                    highlighted = find_next_letter_index(items, highlighted, 1)
-                                if highlighted != old_highlighted:
-                                    movement_occurred = True
-                        
-                        # Skip regular button processing for Odin directional buttons
+                        # Only process discrete event if continuous navigation isn't active
+                        if not direction_held:
+                            handle_directional_navigation(event, hat)
+                        # Skip regular button processing for directional buttons
                         continue
                     
                     # Controller-aware button mapping
@@ -4719,143 +5081,20 @@ try:
                     # Update last state
                     last_dpad_state = hat
                     
-                    movement_occurred = False
+                    # Check if continuous navigation is active for this direction
+                    direction_held = False
+                    if hat[1] > 0 and is_direction_held('up'):
+                        direction_held = True
+                    elif hat[1] < 0 and is_direction_held('down'):
+                        direction_held = True
+                    elif hat[0] < 0 and is_direction_held('left'):
+                        direction_held = True
+                    elif hat[0] > 0 and is_direction_held('right'):
+                        direction_held = True
                     
-                    if hat[1] != 0 and not show_game_details:  # Up or Down
-                        if show_search_input:
-                            # Navigate character selection up/down for search
-                            chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
-                            chars_per_row = 13
-                            total_chars = len(chars)
-                            if input_matches_action(event, "up"):
-                                if search_cursor_position >= chars_per_row:
-                                    search_cursor_position -= chars_per_row
-                                    movement_occurred = True
-                            elif input_matches_action(event, "down"):
-                                if search_cursor_position + chars_per_row < total_chars:
-                                    search_cursor_position += chars_per_row
-                                    movement_occurred = True
-                        elif show_folder_name_input:
-                            # Navigate character selection up/down
-                            chars_per_row = 13
-                            total_chars = 36  # A-Z + 0-9
-                            if input_matches_action(event, "up"):
-                                if folder_name_char_index >= chars_per_row:
-                                    folder_name_char_index -= chars_per_row
-                                    movement_occurred = True
-                            elif input_matches_action(event, "down"):
-                                if folder_name_char_index + chars_per_row < total_chars:
-                                    folder_name_char_index += chars_per_row
-                                    movement_occurred = True
-                        elif show_folder_browser:
-                            # Folder browser navigation
-                            if input_matches_action(event, "up"):
-                                if folder_browser_items and folder_browser_highlighted > 0:
-                                    folder_browser_highlighted -= 1
-                                    movement_occurred = True
-                            elif input_matches_action(event, "down"):
-                                if folder_browser_items and folder_browser_highlighted < len(folder_browser_items) - 1:
-                                    folder_browser_highlighted += 1
-                                    movement_occurred = True
-                        elif mode == "add_systems":
-                            # Add systems navigation
-                            if input_matches_action(event, "up"):
-                                if available_systems and add_systems_highlighted > 0:
-                                    add_systems_highlighted -= 1
-                                    movement_occurred = True
-                            elif input_matches_action(event, "down"):
-                                if available_systems and add_systems_highlighted < len(available_systems) - 1:
-                                    add_systems_highlighted += 1
-                                    movement_occurred = True
-                        elif mode == "games" and settings["view_type"] == "grid":
-                            # Grid navigation: move up/down
-                            cols = 4
-                            if input_matches_action(event, "up"):
-                                if highlighted >= cols:
-                                    highlighted -= cols
-                                    movement_occurred = True
-                            elif input_matches_action(event, "down"):
-                                if highlighted + cols < len(game_list):
-                                    highlighted += cols
-                                    movement_occurred = True
-                        else:
-                            # Regular navigation for list view and other modes
-                            if mode == "games":
-                                current_game_list = filtered_game_list if search_mode and search_query else game_list
-                                max_items = len(current_game_list)
-                            elif mode == "settings":
-                                max_items = len(settings_list)
-                            elif mode == "add_systems":
-                                max_items = len(available_systems)
-                            elif mode == "systems_settings":
-                                configurable_systems = [d for d in data if not d.get('list_systems', False) and d.get('name') != 'Other Systems']
-                                max_items = len(configurable_systems)
-                            elif mode == "system_settings":
-                                max_items = 2  # Hide from menu + Custom ROM folder
-                            else:  # systems
-                                visible_systems = get_visible_systems()
-                                max_items = len(visible_systems) + 1  # +1 for Settings option
-                            
-                            if max_items > 0:
-                                if mode == "add_systems":
-                                    add_systems_highlighted = (add_systems_highlighted - 1) % max_items
-                                elif mode == "systems_settings":
-                                    systems_settings_highlighted = (systems_settings_highlighted - 1) % max_items
-                                elif mode == "system_settings":
-                                    system_settings_highlighted = (system_settings_highlighted - 1) % max_items
-                                else:
-                                    if input_matches_action(event, "up"):
-                                        highlighted = (highlighted - 1) % max_items
-                                    elif input_matches_action(event, "down"):
-                                        highlighted = (highlighted + 1) % max_items
-                                movement_occurred = True
-                    elif hat[0] != 0 and not show_game_details:  # Left or Right
-                        if show_search_input:
-                            # Navigate character selection left/right for search
-                            chars = list("abcdefghijklmnopqrstuvwxyz0123456789") + [" ", "DEL", "CLEAR", "DONE"]
-                            chars_per_row = 13
-                            total_chars = len(chars)
-                            if input_matches_action(event, "left"):
-                                if search_cursor_position % chars_per_row > 0:
-                                    search_cursor_position -= 1
-                                    movement_occurred = True
-                            elif input_matches_action(event, "right"):
-                                if search_cursor_position % chars_per_row < chars_per_row - 1 and search_cursor_position < total_chars - 1:
-                                    search_cursor_position += 1
-                                    movement_occurred = True
-                        elif show_folder_name_input:
-                            # Navigate character selection left/right
-                            chars_per_row = 13
-                            total_chars = 36  # A-Z + 0-9
-                            if input_matches_action(event, "left"):
-                                if folder_name_char_index % chars_per_row > 0:
-                                    folder_name_char_index -= 1
-                                    movement_occurred = True
-                            elif input_matches_action(event, "right"):
-                                if folder_name_char_index % chars_per_row < chars_per_row - 1 and folder_name_char_index < total_chars - 1:
-                                    folder_name_char_index += 1
-                                    movement_occurred = True
-                        elif mode == "games" and settings["view_type"] == "grid":
-                            # Grid navigation: move left/right
-                            cols = 4
-                            if hat[0] < 0:  # Left
-                                if highlighted % cols > 0:
-                                    highlighted -= 1
-                                    movement_occurred = True
-                            else:  # Right
-                                if highlighted % cols < cols - 1 and highlighted < len(game_list) - 1:
-                                    highlighted += 1
-                                    movement_occurred = True
-                        else:
-                            # List navigation: jump to different letter
-                            items = game_list
-                            old_highlighted = highlighted
-                            if hat[0] < 0:  # Left
-                                highlighted = find_next_letter_index(items, highlighted, -1)
-                            else:  # Right
-                                highlighted = find_next_letter_index(items, highlighted, 1)
-                            if highlighted != old_highlighted:
-                                movement_occurred = True
+                    # Only process discrete event if continuous navigation isn't active
+                    if not direction_held:
+                        handle_directional_navigation(event, hat)
                     
                     # Movement tracking complete
 
