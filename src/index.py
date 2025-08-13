@@ -2459,16 +2459,32 @@ try:
     # Check and install NSZ package if needed
     def check_and_install_nsz():
         """Check if NSZ package is installed and install it if needed"""
+        # First check if nsz command is available (this is what we actually need)
         try:
-            import nsz
-            print("NSZ package is already installed")
+            import subprocess
+            result = subprocess.run(['nsz', '--version'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                print("NSZ command-line tool is available")
+                return True
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
+            pass
+        
+        # If command is not available, try to install the package
+        print("NSZ command-line tool not found. Attempting to install NSZ package...")
+        try:
+            import subprocess
+            import sys
             
-            # Also check if nsz command is available
+            # Use pip to install nsz
+            result = subprocess.run([sys.executable, "-m", "pip", "install", "nsz"], 
+                                  capture_output=True, text=True, check=True)
+            print("NSZ package installed successfully")
+            
+            # Verify the command is now available
             try:
-                import subprocess
                 result = subprocess.run(['nsz', '--version'], capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
-                    print("NSZ command-line tool is available")
+                    print("NSZ command-line tool is now available")
                     return True
                 else:
                     print("NSZ package installed but command-line tool not working")
@@ -2477,37 +2493,13 @@ try:
                 print("NSZ package installed but command-line tool not available")
                 return False
                 
-        except ImportError:
-            print("NSZ package not found. Attempting to install...")
-            try:
-                import subprocess
-                import sys
-                
-                # Use pip to install nsz
-                result = subprocess.run([sys.executable, "-m", "pip", "install", "nsz"], 
-                                      capture_output=True, text=True, check=True)
-                print("NSZ package installed successfully")
-                
-                # Verify the command is now available
-                try:
-                    result = subprocess.run(['nsz', '--version'], capture_output=True, text=True, timeout=5)
-                    if result.returncode == 0:
-                        print("NSZ command-line tool is now available")
-                        return True
-                    else:
-                        print("NSZ package installed but command-line tool not working")
-                        return False
-                except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
-                    print("NSZ package installed but command-line tool not available")
-                    return False
-                    
-            except subprocess.CalledProcessError as e:
-                print(f"Failed to install NSZ package: {e}")
-                print("You may need to install it manually: pip install nsz")
-                return False
-            except Exception as e:
-                print(f"Error checking/installing NSZ package: {e}")
-                return False
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to install NSZ package: {e}")
+            print("You may need to install it manually: pip install nsz")
+            return False
+        except Exception as e:
+            print(f"Error checking/installing NSZ package: {e}")
+            return False
     
     # Check NSZ package on startup
     nsz_available = check_and_install_nsz()
