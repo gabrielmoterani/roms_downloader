@@ -251,7 +251,7 @@
     "name": "Nintendo Switch",
     "url": "https://wow-vicious.com/NSPdir/base/",
     "regex": "<a href=\"(?P<href>[^\"]+)\">(?P<title>[^<]+)</a>",
-    "file_format": [".nsz", ".nsp"],
+    "file_format": [".nsz"],
     "roms_folder": "SWITCH",
     "usa_regex": "(USA)",
     "boxarts": "https://api.ultranx.ru/games/?limit=100000",
