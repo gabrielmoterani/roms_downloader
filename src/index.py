@@ -2459,7 +2459,40 @@ try:
     # Check and install NSZ package if needed
     def check_and_install_nsz():
         """Check if NSZ package is installed and install it if needed"""
-        # First check if nsz command is available (this is what we actually need)
+        # First try to import nsz directly to check if it's available
+        try:
+            # Redirect stdin to avoid EOFError during import
+            import sys
+            import os
+            from io import StringIO
+            
+            # Save original stdin
+            original_stdin = sys.stdin
+            
+            # Replace stdin with empty StringIO to prevent input() calls
+            sys.stdin = StringIO("")
+            
+            try:
+                import nsz
+                print("NSZ package is available")
+                return True
+            except EOFError:
+                # This is the error we're trying to fix - NSZ is trying to get input
+                print("NSZ package found but has input() calls during import")
+                print("NSZ functionality will be disabled to prevent crashes")
+                return False
+            except ImportError:
+                # NSZ is not installed
+                pass
+            finally:
+                # Restore original stdin
+                sys.stdin = original_stdin
+                
+        except Exception as e:
+            print(f"Error checking NSZ package: {e}")
+            return False
+        
+        # If direct import failed, try command-line tool
         try:
             import subprocess
             result = subprocess.run(['nsz', '--version'], capture_output=True, text=True, timeout=5)
@@ -2470,7 +2503,7 @@ try:
             pass
         
         # If command is not available, try to install the package
-        print("NSZ command-line tool not found. Attempting to install NSZ package...")
+        print("NSZ not found. Attempting to install NSZ package...")
         try:
             import subprocess
             import sys
@@ -2480,7 +2513,7 @@ try:
                                   capture_output=True, text=True, check=True)
             print("NSZ package installed successfully")
             
-            # Verify the command is now available
+            # Verify the command is now available (don't try to import again to avoid EOFError)
             try:
                 result = subprocess.run(['nsz', '--version'], capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
