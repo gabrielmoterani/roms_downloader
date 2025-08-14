@@ -1,4 +1,4 @@
-.PHONY: run watch install dev clean test lint format setup
+.PHONY: run watch install dev clean setup build-pygame build-linux build-apk build
 
 CONDA_ENV = roms_downloader
 CONDA_ACTIVATE = conda run -n $(CONDA_ENV)
@@ -33,36 +33,46 @@ clean:
 	find . -type f -name "*.pyc" -delete
 
 # Create distribution package for console deployment
-build:
+build-pygame:
 	mkdir -p dist
 	cp src/index.py dist/dw.pygame
-	cp assets/config/download.json dist/download.json
+	zip -r dist/pygame.zip dist/dw.pygame
+	rm -rf dist/dw.pygame
 	@echo "Distribution created in dist/ folder"
 	@echo "Copy dist/dw.pygame and dist/download.json to console pygame directory"
 
-# Format code with black
-format:
-	$(CONDA_ACTIVATE) black src/
+# Build Linux binary with PyInstaller
+build-linux:
+	mkdir -p dist
+	$(CONDA_ACTIVATE) pyinstaller --clean --onefile --hidden-import pygame --hidden-import requests --hidden-import nsz --distpath dist --name linux src/index.py
+	@echo "Linux binary created in dist/rom-downloader"
+	rm -rf build/
 
-# Lint code with flake8
-lint:
-	$(CONDA_ACTIVATE) flake8 src/
+# Build APK with buildozer (local - requires Android SDK)
+build-apk:
+	@echo "Setting up Android SDK requirements..."
+	mkdir -p dist
+	$(CONDA_ACTIVATE) buildozer android debug
+	cp bin/*.apk dist/ 2>/dev/null || echo "APK build completed, check bin/ folder"
+	@echo "APK created in dist/ folder"
+	rm -rf build/
 
-# Run tests with pytest
-test:
-	$(CONDA_ACTIVATE) pytest
+# Build all targets (local)
+build: build-pygame build-linux build-apk
 
 # Show help
 help:
 	@echo "Available targets:"
-	@echo "  run      - Run the ROM downloader application"
-	@echo "  watch    - Run with file watching (auto-restart on changes)"
-	@echo "  setup    - Create conda environment"
-	@echo "  install  - Install in development mode"
-	@echo "  dev      - Install with dev dependencies"
-	@echo "  clean    - Clean generated files and caches"
-	@echo "  format   - Format code with black"
-	@echo "  lint     - Lint code with flake8"
-	@echo "  test     - Run tests with pytest"
-	@echo "  build    - Create distribution package"
-	@echo "  help     - Show this help message"
+	@echo "  run         - Run the ROM downloader application"
+	@echo "  watch       - Run with file watching (auto-restart on changes)"
+	@echo "  setup       - Create conda environment"
+	@echo "  install     - Install in development mode"
+	@echo "  dev         - Install with dev dependencies"
+	@echo "  clean       - Clean generated files and caches"
+	@echo "  format      - Format code with black"
+	@echo "  lint        - Lint code with flake8"
+	@echo "  test        - Run tests with pytest"
+	@echo "  build       - Create distribution package for console"
+	@echo "  build-linux - Build Linux binary with PyInstaller (simple)"
+	@echo "  build-apk   - Build Android APK with buildozer (custom Docker)"
+	@echo "  help        - Show this help message"
