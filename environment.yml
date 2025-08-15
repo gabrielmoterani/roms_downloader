@@ -12,3 +12,5 @@ dependencies:
     - pyinstaller
     - watchdog
     - nsz
+    - kivy
+    - kivymd

@@ -13,6 +13,7 @@
   {
     "name": "PlayStation 2",
     "url": "https://myrient.erista.me/files/Redump/Sony%20-%20PlayStation%202/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".iso", ".zip"],
     "roms_folder": "ps2",
     "usa_regex": "(USA)",
@@ -23,6 +24,7 @@
   {
     "name": "PlayStation 3",
     "url": "https://myrient.erista.me/files/Redump/Sony%20-%20PlayStation%203/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".iso", ".pkg", ".zip"],
     "roms_folder": "ps3",
     "usa_regex": "(USA)",
@@ -32,6 +34,7 @@
   {
     "name": "PlayStation Portable",
     "url": "https://myrient.erista.me/files/Redump/Sony%20-%20PlayStation%20Portable/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".iso", ".cso", ".zip"],
     "roms_folder": "psp",
     "usa_regex": "(USA)",
@@ -42,6 +45,7 @@
   {
     "name": "Game Boy Aftermarket",
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy%20%28Aftermarket%29/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".gb", ".zip"],
     "roms_folder": "gb",
     "usa_regex": "(USA)",
@@ -51,6 +55,7 @@
   },  {
     "name": "Game Boy",
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".gb", ".zip"],
     "roms_folder": "gb",
     "usa_regex": "(USA)",
@@ -61,6 +66,7 @@
   {
     "name": "Game Boy Color",
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy%20Color/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".gbc", ".zip"],
     "roms_folder": "gbc",
     "usa_regex": "(USA)",
@@ -71,6 +77,7 @@
   {
     "name": "Game Boy Advance",
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Game%20Boy%20Advance/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".gba", ".zip"],
     "roms_folder": "gba",
     "usa_regex": "(USA)",
@@ -81,6 +88,7 @@
   {
     "name": "Nintendo DS",
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Nintendo%20DS%20%28Decrypted%29/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".nds", ".zip"],
     "roms_folder": "nds",
     "usa_regex": "(USA)",
@@ -91,6 +99,7 @@
   {
     "name": "Nintendo 3DS",
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Nintendo%203DS%20%28Decrypted%29/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".3ds", ".cia", ".zip"],
     "roms_folder": "n3ds",
     "usa_regex": "(USA)",
@@ -101,6 +110,7 @@
   {
     "name": "Nintendo Entertainment System",
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Nintendo%20Entertainment%20System%20%28Headered%29/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".nes", ".zip"],
     "roms_folder": "nes",
     "usa_regex": "(USA)",
@@ -111,6 +121,7 @@
   {
     "name": "Super Nintendo",
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".sfc", ".smc", ".zip"],
     "roms_folder": "snes",
     "usa_regex": "(USA)",
@@ -121,6 +132,7 @@
   {
     "name": "Nintendo 64",
     "url": "https://myrient.erista.me/files/No-Intro/Nintendo%20-%20Nintendo%2064%20%28BigEndian%29/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".n64", ".z64", ".zip"],
     "roms_folder": "n64",
     "usa_regex": "(USA)",
@@ -131,6 +143,7 @@
   {
     "name": "Nintendo Game Cube",
     "url": "https://myrient.erista.me/files/Redump/Nintendo%20-%20GameCube%20-%20NKit%20RVZ%20%5Bzstd-19-128k%5D/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".rvz", ".iso", ".zip"],
     "roms_folder": "gc",
     "usa_regex": "(USA)",
@@ -141,6 +154,7 @@
   {
     "name": "Nintendo Wii",
     "url": "https://myrient.erista.me/files/Redump/Nintendo%20-%20Wii%20-%20NKit%20RVZ%20%5Bzstd-19-128k%5D/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".rvz", ".iso", ".zip"],
     "roms_folder": "wii",
     "usa_regex": "(USA)",
@@ -151,6 +165,7 @@
   {
     "name": "Nintendo Wii U",
     "url": "https://myrient.erista.me/files/Redump/Nintendo%20-%20Wii%20U%20-%20WUX/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".wux", ".zip"],
     "roms_folder": "wiiu",
     "usa_regex": "(USA)",
@@ -161,6 +176,7 @@
   {
     "name": "Xbox",
     "url": "https://myrient.erista.me/files/Redump/Microsoft%20-%20Xbox/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".iso", ".zip"],
     "roms_folder": "xbox",
     "usa_regex": "(USA)",
@@ -171,6 +187,7 @@
   {
     "name": "Xbox 360",
     "url": "https://myrient.erista.me/files/Redump/Microsoft%20-%20Xbox%20360/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".iso", ".zip"],
     "roms_folder": "xbox360",
     "usa_regex": "(USA)",
@@ -180,6 +197,7 @@
   {
     "name": "Sega Genesis",
     "url": "https://myrient.erista.me/files/No-Intro/Sega%20-%20Mega%20Drive%20-%20Genesis/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".md", ".gen", ".zip"],
     "roms_folder": "genesis",
     "usa_regex": "(USA)",
@@ -190,6 +208,7 @@
   {
     "name": "Game Gear",
     "url": "https://myrient.erista.me/files/No-Intro/Sega%20-%20Game%20Gear/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".gg", ".zip"],
     "roms_folder": "gamegear",
     "usa_regex": "(USA)",
@@ -200,6 +219,7 @@
   {
     "name": "Sega Saturn",
     "url": "https://myrient.erista.me/files/Redump/Sega%20-%20Saturn/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".cue", ".bin", ".zip"],
     "roms_folder": "saturn",
     "usa_regex": "(USA)",
@@ -210,6 +230,7 @@
   {
     "name": "Sega Dreamcast",
     "url": "https://myrient.erista.me/files/Redump/Sega%20-%20Dreamcast/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".cue", ".gdi", ".zip"],
     "roms_folder": "dreamcast",
     "usa_regex": "(USA)",
@@ -220,6 +241,7 @@
   {
     "name": "Panasonic 3DO",
     "url": "https://myrient.erista.me/files/Redump/Panasonic%20-%203DO%20Interactive%20Multiplayer/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".iso", ".cue", ".zip"],
     "roms_folder": "3do",
     "usa_regex": "(USA)",
@@ -230,6 +252,7 @@
   {
     "name": "ColecoVision",
     "url": "https://myrient.erista.me/files/No-Intro/Coleco%20-%20ColecoVision/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".col", ".zip"],
     "roms_folder": "colecovision",
     "usa_regex": "(USA)",
@@ -240,6 +263,7 @@
   {
     "name": "Intellivision",
     "url": "https://myrient.erista.me/files/No-Intro/Mattel%20-%20Intellivision/",
+    "regex": "<tr><td class=\"link\"><a href=\"(?P<href>[^\"]+)\" title=\"(?P<title>[^\"]+)\">(?P<text>[^<]+)</a></td><td class=\"size\">(?P<size>[^<]+)</td><td class=\"date\">[^<]*</td></tr>",
     "file_format": [".int", ".zip"],
     "roms_folder": "intellivision",
     "usa_regex": "(USA)",
